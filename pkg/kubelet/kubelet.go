@@ -115,6 +115,7 @@ import (
 	"k8s.io/kubernetes/pkg/volume/util/subpath"
 	utilexec "k8s.io/utils/exec"
 	"k8s.io/utils/integer"
+	"k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff"
 )
 
 const (
@@ -354,7 +355,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	nodeLabels map[string]string,
 	seccompProfileRoot string,
 	bootstrapCheckpointPath string,
-	nodeStatusMaxImages int32) (*Kubelet, error) {
+	nodeStatusMaxImages int32,
+	volumeOperationMaxBackoff metav1.Duration) (*Kubelet, error) {
 	if rootDirectory == "" {
 		return nil, fmt.Errorf("invalid root directory %q", rootDirectory)
 	}
@@ -788,6 +790,10 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			klet.getPluginsRegistrationDir(), /* sockDir */
 			klet.getPluginsDir(),             /* deprecatedSockDir */
 		)
+	}
+
+	if volumeOperationMaxBackoff.Duration != 0 {
+		exponentialbackoff.SetMaxExponentialBackoffDuration(volumeOperationMaxBackoff.Duration)
 	}
 
 	// If the experimentalMounterPathFlag is set, we do not want to
