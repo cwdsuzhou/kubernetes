@@ -39,6 +39,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/volumemanager/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/volumemanager/populator"
 	"k8s.io/kubernetes/pkg/kubelet/volumemanager/reconciler"
+	"k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
@@ -154,7 +155,8 @@ func NewVolumeManager(
 	kubeletPodsDir string,
 	recorder record.EventRecorder,
 	checkNodeCapabilitiesBeforeMount bool,
-	keepTerminatedPodVolumes bool) VolumeManager {
+	keepTerminatedPodVolumes bool,
+	volumeOperationMaxBackoff time.Duration) VolumeManager {
 
 	vm := &volumeManager{
 		kubeClient:          kubeClient,
@@ -167,6 +169,7 @@ func NewVolumeManager(
 			recorder,
 			checkNodeCapabilitiesBeforeMount,
 			volumepathhandler.NewBlockVolumePathHandler())),
+		volumeOperationMaxBackoff: volumeOperationMaxBackoff,
 	}
 
 	vm.desiredStateOfWorldPopulator = populator.NewDesiredStateOfWorldPopulator(
@@ -232,11 +235,18 @@ type volumeManager struct {
 	// desiredStateOfWorldPopulator runs an asynchronous periodic loop to
 	// populate the desiredStateOfWorld using the kubelet PodManager.
 	desiredStateOfWorldPopulator populator.DesiredStateOfWorldPopulator
+
+	// volumeOperationMaxBackoff set the max backOff time of volume operations,
+	// if not set or set 0, it would not be effective.
+	volumeOperationMaxBackoff time.Duration
 }
 
 func (vm *volumeManager) Run(sourcesReady config.SourcesReady, stopCh <-chan struct{}) {
 	defer runtime.HandleCrash()
 
+	if vm.volumeOperationMaxBackoff != 0 {
+		exponentialbackoff.SetMaxExponentialBackoffDuration(vm.volumeOperationMaxBackoff)
+	}
 	go vm.desiredStateOfWorldPopulator.Run(sourcesReady, stopCh)
 	klog.V(2).Infof("The desired_state_of_world populator starts")
 

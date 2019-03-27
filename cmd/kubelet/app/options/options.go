@@ -172,6 +172,9 @@ type KubeletFlags struct {
 	// NodeStatusMaxImages caps the number of images reported in Node.Status.Images.
 	// This is an experimental, short-term flag to help with node scalability.
 	NodeStatusMaxImages int32
+	// volumeOperationMaxBackOff set max backoff to volume options, e.g. attach, verify.
+	// Defaults to 0.
+	VolumeOperationMaxBackOff metav1.Duration
 
 	// DEPRECATED FLAGS
 	// minimumGCAge is the minimum age for a finished container before it is
@@ -423,6 +426,7 @@ func (f *KubeletFlags) AddFlags(mainfs *pflag.FlagSet) {
 	fs.StringVar(&f.SeccompProfileRoot, "seccomp-profile-root", f.SeccompProfileRoot, "<Warning: Alpha feature> Directory path for seccomp profiles.")
 	fs.StringVar(&f.BootstrapCheckpointPath, "bootstrap-checkpoint-path", f.BootstrapCheckpointPath, "<Warning: Alpha feature> Path to the directory where the checkpoints are stored")
 	fs.Int32Var(&f.NodeStatusMaxImages, "node-status-max-images", f.NodeStatusMaxImages, "<Warning: Alpha feature> The maximum number of images to report in Node.Status.Images. If -1 is specified, no cap will be applied.")
+	fs.DurationVar(&f.VolumeOperationMaxBackOff.Duration, "volume-operation-max-backoff-time", f.VolumeOperationMaxBackOff.Duration, "<Warning: Alpha feature> The maximum backoff time of volume operation. If it is not specified, it will not be applied.")
 
 	// DEPRECATED FLAGS
 	fs.BoolVar(&f.Containerized, "containerized", f.Containerized, "Running kubelet in a container.")
