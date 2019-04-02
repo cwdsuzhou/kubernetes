@@ -230,6 +230,7 @@ func startAttachDetachController(ctx ControllerContext) (http.Handler, bool, err
 			ctx.ComponentConfig.AttachDetachController.DisableAttachDetachReconcilerSync,
 			ctx.ComponentConfig.AttachDetachController.ReconcilerSyncLoopPeriod.Duration,
 			attachdetach.DefaultTimerConfig,
+			ctx.ComponentConfig.AttachDetachController.VolumeOperationMaxBackoff.Duration,
 		)
 	if attachDetachControllerErr != nil {
 		return nil, true, fmt.Errorf("failed to start attach/detach controller: %v", attachDetachControllerErr)
@@ -245,7 +246,8 @@ func startVolumeExpandController(ctx ControllerContext) (http.Handler, bool, err
 			ctx.InformerFactory.Core().V1().PersistentVolumeClaims(),
 			ctx.InformerFactory.Core().V1().PersistentVolumes(),
 			ctx.Cloud,
-			ProbeExpandableVolumePlugins(ctx.ComponentConfig.PersistentVolumeBinderController.VolumeConfiguration))
+			ProbeExpandableVolumePlugins(ctx.ComponentConfig.PersistentVolumeBinderController.VolumeConfiguration),
+			ctx.ComponentConfig.ExpandController.VolumeOperationMaxBackoff.Duration)
 
 		if expandControllerErr != nil {
 			return nil, true, fmt.Errorf("failed to start volume expand controller : %v", expandControllerErr)

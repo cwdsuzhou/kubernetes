@@ -37,7 +37,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/cloud-provider"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/volume/events"
 	"k8s.io/kubernetes/pkg/controller/volume/expand/cache"
@@ -102,7 +102,8 @@ func NewExpandController(
 	pvcInformer coreinformers.PersistentVolumeClaimInformer,
 	pvInformer coreinformers.PersistentVolumeInformer,
 	cloud cloudprovider.Interface,
-	plugins []volume.VolumePlugin) (ExpandController, error) {
+	plugins []volume.VolumePlugin,
+	volumeOperationMaxBackoff time.Duration) (ExpandController, error) {
 
 	expc := &expandController{
 		kubeClient: kubeClient,
@@ -128,7 +129,8 @@ func NewExpandController(
 		&expc.volumePluginMgr,
 		expc.recorder,
 		false,
-		blkutil))
+		blkutil),
+		volumeOperationMaxBackoff)
 
 	expc.resizeMap = cache.NewVolumeResizeMap(expc.kubeClient)
 

@@ -421,7 +421,8 @@ func createAdClients(ns *v1.Namespace, t *testing.T, server *httptest.Server, sy
 		nil, /* prober */
 		false,
 		5*time.Second,
-		timers)
+		timers,
+		30*time.Second)
 
 	if err != nil {
 		t.Fatalf("Error creating AttachDetach : %v", err)
