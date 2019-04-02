@@ -104,6 +104,7 @@ type testCall func(ctrl *PersistentVolumeController, reactor *volumeReactor, tes
 
 const testNamespace = "default"
 const mockPluginName = "kubernetes.io/mock-volume"
+const defaultVolumeOperatoionMaxBackOff = 30 * time.Second
 
 var versionConflictError = errors.New("VersionError")
 var novolumes []*v1.PersistentVolume
@@ -713,6 +714,7 @@ func newTestController(kubeClient clientset.Interface, informerFactory informers
 		NodeInformer:              informerFactory.Core().V1().Nodes(),
 		EventRecorder:             record.NewFakeRecorder(1000),
 		EnableDynamicProvisioning: enableDynamicProvisioning,
+		VolumeOperationMaxBackoff: defaultVolumeOperatoionMaxBackOff,
 	}
 	ctrl, err := NewController(params)
 	if err != nil {
