@@ -33,6 +33,7 @@ import (
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff"
 	"k8s.io/kubernetes/pkg/volume/util/types"
+	"time"
 )
 
 const (
@@ -71,12 +72,18 @@ type NestedPendingOperations interface {
 }
 
 // NewNestedPendingOperations returns a new instance of NestedPendingOperations.
-func NewNestedPendingOperations(exponentialBackOffOnError bool) NestedPendingOperations {
+func NewNestedPendingOperations(exponentialBackOffOnError bool,
+	volumeOperationMaxBackoff time.Duration) NestedPendingOperations {
 	g := &nestedPendingOperations{
 		operations:                []operation{},
 		exponentialBackOffOnError: exponentialBackOffOnError,
+		volumeOperationMaxBackoff: volumeOperationMaxBackoff,
 	}
 	g.cond = sync.NewCond(&g.lock)
+	if volumeOperationMaxBackoff != 0 {
+		exponentialbackoff.SetMaxExponentialBackoffDuration(volumeOperationMaxBackoff)
+	}
+
 	return g
 }
 
@@ -85,6 +92,7 @@ type nestedPendingOperations struct {
 	exponentialBackOffOnError bool
 	cond                      *sync.Cond
 	lock                      sync.RWMutex
+	volumeOperationMaxBackoff time.Duration
 }
 
 type operation struct {

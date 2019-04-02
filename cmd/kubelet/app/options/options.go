@@ -172,8 +172,9 @@ type KubeletFlags struct {
 	// NodeStatusMaxImages caps the number of images reported in Node.Status.Images.
 	// This is an experimental, short-term flag to help with node scalability.
 	NodeStatusMaxImages int32
-	// volumeOperationMaxBackOff set max backoff to volume options, e.g. attach, verify.
-	// Defaults to 0.
+	// volumeOperationMaxBackOff sets max backoff to volume options, e.g. attach, verify.
+	// Defaults to 0 and would not be effective,
+	// the default value of maxDurationBeforeRetry in exponential_backoff.go would be used.
 	VolumeOperationMaxBackOff metav1.Duration
 
 	// DEPRECATED FLAGS
