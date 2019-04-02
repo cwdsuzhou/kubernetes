@@ -201,6 +201,7 @@ func startPersistentVolumeBinderController(ctx ControllerContext) (http.Handler,
 		PodInformer:               ctx.InformerFactory.Core().V1().Pods(),
 		NodeInformer:              ctx.InformerFactory.Core().V1().Nodes(),
 		EnableDynamicProvisioning: ctx.ComponentConfig.PersistentVolumeBinderController.VolumeConfiguration.EnableDynamicProvisioning,
+		VolumeOperationMaxBackoff: ctx.ComponentConfig.PersistentVolumeBinderController.VolumeOperationMaxBackoff.Duration,
 	}
 	volumeController, volumeControllerErr := persistentvolumecontroller.NewController(params)
 	if volumeControllerErr != nil {

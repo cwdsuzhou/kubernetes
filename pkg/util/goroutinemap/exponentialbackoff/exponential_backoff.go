@@ -31,20 +31,13 @@ const (
 	initialDurationBeforeRetry time.Duration = 500 * time.Millisecond
 )
 
-var (
-	// maxDurationBeforeRetry is the maximum amount of time that
-	// durationBeforeRetry will grow to due to exponential backoff.
-	// Value is slightly offset from 2 minutes to make timeouts due to this
-	// variable recognizable.
-	maxDurationBeforeRetry time.Duration = 2*time.Minute + 2*time.Second
-)
-
 // ExponentialBackoff contains the last occurrence of an error and the duration
 // that retries are not permitted.
 type ExponentialBackoff struct {
-	lastError           error
-	lastErrorTime       time.Time
-	durationBeforeRetry time.Duration
+	lastError              error
+	lastErrorTime          time.Time
+	durationBeforeRetry    time.Duration
+	MaxDurationBeforeRetry time.Duration
 }
 
 // SafeToRetry returns an error if the durationBeforeRetry period for the given
@@ -62,8 +55,8 @@ func (expBackoff *ExponentialBackoff) Update(err *error) {
 		expBackoff.durationBeforeRetry = initialDurationBeforeRetry
 	} else {
 		expBackoff.durationBeforeRetry = 2 * expBackoff.durationBeforeRetry
-		if expBackoff.durationBeforeRetry > maxDurationBeforeRetry {
-			expBackoff.durationBeforeRetry = maxDurationBeforeRetry
+		if expBackoff.durationBeforeRetry > expBackoff.MaxDurationBeforeRetry {
+			expBackoff.durationBeforeRetry = expBackoff.MaxDurationBeforeRetry
 		}
 	}
 
@@ -99,11 +92,6 @@ func IsExponentialBackoff(err error) bool {
 	default:
 		return false
 	}
-}
-
-// SetMaxExponentialBackoffDuration sets the maxDurationBeforeRetry value
-func SetMaxExponentialBackoffDuration(maxDuration time.Duration) {
-	maxDurationBeforeRetry = maxDuration
 }
 
 // exponentialBackoffError is the error returned returned from GoroutineMap when

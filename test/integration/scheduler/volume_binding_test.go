@@ -75,12 +75,13 @@ var (
 )
 
 const (
-	node1                 = "node-1"
-	node2                 = "node-2"
-	podLimit              = 100
-	volsPerPod            = 5
-	nodeAffinityLabelKey  = "kubernetes.io/hostname"
-	provisionerPluginName = "kubernetes.io/mock-provisioner"
+	node1                             = "node-1"
+	node2                             = "node-2"
+	podLimit                          = 100
+	volsPerPod                        = 5
+	nodeAffinityLabelKey              = "kubernetes.io/hostname"
+	provisionerPluginName             = "kubernetes.io/mock-provisioner"
+	defaultVolumeOperatoionMaxBackOff = 30 * time.Second
 )
 
 type testPV struct {
@@ -957,6 +958,7 @@ func initPVController(context *testContext, provisionDelaySeconds int) (*persist
 		PodInformer:               informerFactory.Core().V1().Pods(),
 		NodeInformer:              informerFactory.Core().V1().Nodes(),
 		EnableDynamicProvisioning: true,
+		VolumeOperationMaxBackoff: defaultVolumeOperatoionMaxBackOff,
 	}
 
 	ctrl, err := persistentvolume.NewController(params)

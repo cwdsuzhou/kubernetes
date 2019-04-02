@@ -80,9 +80,6 @@ func NewNestedPendingOperations(exponentialBackOffOnError bool,
 		volumeOperationMaxBackoff: volumeOperationMaxBackoff,
 	}
 	g.cond = sync.NewCond(&g.lock)
-	if volumeOperationMaxBackoff != 0 {
-		exponentialbackoff.SetMaxExponentialBackoffDuration(volumeOperationMaxBackoff)
-	}
 
 	return g
 }
@@ -127,7 +124,8 @@ func (grm *nestedPendingOperations) Run(
 			}
 			// previous operation and new operation are different. reset op. name and exp. backoff
 			grm.operations[previousOpIndex].operationName = generatedOperations.OperationName
-			grm.operations[previousOpIndex].expBackoff = exponentialbackoff.ExponentialBackoff{}
+			grm.operations[previousOpIndex].expBackoff = exponentialbackoff.
+				ExponentialBackoff{MaxDurationBeforeRetry: grm.volumeOperationMaxBackoff}
 		}
 
 		// Update existing operation to mark as pending.
@@ -142,7 +140,9 @@ func (grm *nestedPendingOperations) Run(
 				volumeName:       volumeName,
 				podName:          podName,
 				operationName:    generatedOperations.OperationName,
-				expBackoff:       exponentialbackoff.ExponentialBackoff{},
+				expBackoff: exponentialbackoff.ExponentialBackoff{
+					MaxDurationBeforeRetry: grm.volumeOperationMaxBackoff,
+				},
 			})
 	}
 

@@ -17,6 +17,8 @@ limitations under the License.
 package options
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 
 	expandconfig "k8s.io/kubernetes/pkg/controller/volume/expand/config"
@@ -33,8 +35,7 @@ func (o *ExpandControllerOptions) AddFlags(fs *pflag.FlagSet) {
 		return
 	}
 
-	fs.DurationVar(&o.VolumeOperationMaxBackoff.Duration, "expand-max-backoff-time",
-		o.VolumeOperationMaxBackoff.Duration, "<Warning: Alpha feature> The maximum backoff time of expand. If it is not specified, it will not be applied.")
+	fs.DurationVar(&o.VolumeOperationMaxBackoff.Duration, "expand-max-backoff-time", 30*time.Second, "<Warning: Alpha feature> The maximum backoff time of expand. If it is not specified, it will not be applied.")
 }
 
 // ApplyTo fills up ExpandController config with options.

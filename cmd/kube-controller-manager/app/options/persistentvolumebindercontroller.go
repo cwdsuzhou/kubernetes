@@ -17,6 +17,8 @@ limitations under the License.
 package options
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 
 	persistentvolumeconfig "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/config"
@@ -43,6 +45,7 @@ func (o *PersistentVolumeBinderControllerOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.VolumeConfiguration.EnableHostPathProvisioning, "enable-hostpath-provisioner", o.VolumeConfiguration.EnableHostPathProvisioning, "Enable HostPath PV provisioning when running without a cloud provider. This allows testing and development of provisioning features.  HostPath provisioning is not supported in any way, won't work in a multi-node cluster, and should not be used for anything other than testing or development.")
 	fs.BoolVar(&o.VolumeConfiguration.EnableDynamicProvisioning, "enable-dynamic-provisioning", o.VolumeConfiguration.EnableDynamicProvisioning, "Enable dynamic provisioning for environments that support it.")
 	fs.StringVar(&o.VolumeConfiguration.FlexVolumePluginDir, "flex-volume-plugin-dir", o.VolumeConfiguration.FlexVolumePluginDir, "Full path of the directory in which the flex volume plugin should search for additional third party volume plugins.")
+	fs.DurationVar(&o.VolumeOperationMaxBackoff.Duration, "pv-max-backoff-time", 30*time.Second, "<Warning: Alpha feature> The maximum backoff time of pv operation. If it is not specified, it will not be applied.")
 }
 
 // ApplyTo fills up PersistentVolumeBinderController config with options.
@@ -53,6 +56,7 @@ func (o *PersistentVolumeBinderControllerOptions) ApplyTo(cfg *persistentvolumec
 
 	cfg.PVClaimBinderSyncPeriod = o.PVClaimBinderSyncPeriod
 	cfg.VolumeConfiguration = o.VolumeConfiguration
+	cfg.VolumeOperationMaxBackoff = o.VolumeOperationMaxBackoff
 
 	return nil
 }
