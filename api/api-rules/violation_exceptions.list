@@ -58,6 +58,7 @@ API rule violation: names_match,k8s.io/apimachinery/pkg/util/intstr,IntOrString,
 API rule violation: names_match,k8s.io/apimachinery/pkg/util/intstr,IntOrString,Type
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,AttachDetachControllerConfiguration,DisableAttachDetachReconcilerSync
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,AttachDetachControllerConfiguration,ReconcilerSyncLoopPeriod
+API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,AttachDetachControllerConfiguration,VolumeOperationMaxBackoff
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,CSRSigningControllerConfiguration,ClusterSigningCertFile
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,CSRSigningControllerConfiguration,ClusterSigningDuration
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,CSRSigningControllerConfiguration,ClusterSigningKeyFile
@@ -70,6 +71,7 @@ API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,D
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,DeprecatedControllerConfiguration,DeletingPodsQPS
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,DeprecatedControllerConfiguration,RegisterRetryCount
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,EndpointControllerConfiguration,ConcurrentEndpointSyncs
+API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,ExpandControllerConfiguration,VolumeOperationMaxBackoff
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,GarbageCollectorControllerConfiguration,ConcurrentGCSyncs
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,GarbageCollectorControllerConfiguration,EnableGarbageCollector
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,GarbageCollectorControllerConfiguration,GCIgnoredResources
@@ -110,6 +112,7 @@ API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,K
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,KubeControllerManagerConfiguration,DeploymentController
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,KubeControllerManagerConfiguration,DeprecatedController
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,KubeControllerManagerConfiguration,EndpointController
+API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,KubeControllerManagerConfiguration,ExpandController
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,KubeControllerManagerConfiguration,GarbageCollectorController
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,KubeControllerManagerConfiguration,Generic
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,KubeControllerManagerConfiguration,HPAController
@@ -140,6 +143,7 @@ API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,N
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,NodeLifecycleControllerConfiguration,UnhealthyZoneThreshold
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,PersistentVolumeBinderControllerConfiguration,PVClaimBinderSyncPeriod
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,PersistentVolumeBinderControllerConfiguration,VolumeConfiguration
+API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,PersistentVolumeBinderControllerConfiguration,VolumeOperationMaxBackoff
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,PersistentVolumeRecyclerConfiguration,IncrementTimeoutHostPath
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,PersistentVolumeRecyclerConfiguration,IncrementTimeoutNFS
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,PersistentVolumeRecyclerConfiguration,MaximumRetry
