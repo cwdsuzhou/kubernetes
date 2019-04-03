@@ -46,13 +46,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	scaleclient "k8s.io/client-go/scale"
-	csi "k8s.io/csi-api/pkg/client/clientset/versioned"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/test/e2e/framework/metrics"
 	testutils "k8s.io/kubernetes/test/utils"
-	nodeapiclient "k8s.io/node-api/pkg/client/clientset/versioned"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -78,8 +76,6 @@ type Framework struct {
 	ClientSet                        clientset.Interface
 	KubemarkExternalClusterClientSet clientset.Interface
 	APIExtensionsClientSet           apiextensionsclient.Interface
-	CSIClientSet                     csi.Interface
-	NodeAPIClientSet                 nodeapiclient.Interface
 
 	InternalClientset *internalclientset.Clientset
 	AggregatorClient  *aggregatorclient.Clientset
@@ -194,13 +190,9 @@ func (f *Framework) BeforeEach() {
 		ExpectNoError(err)
 		f.DynamicClient, err = dynamic.NewForConfig(config)
 		ExpectNoError(err)
-		// csi.storage.k8s.io is based on CRD, which is served only as JSON
+		// node.k8s.io is based on CRD, which is served only as JSON
 		jsonConfig := config
 		jsonConfig.ContentType = "application/json"
-		f.CSIClientSet, err = csi.NewForConfig(jsonConfig)
-		ExpectNoError(err)
-		// node.k8s.io is also based on CRD
-		f.NodeAPIClientSet, err = nodeapiclient.NewForConfig(jsonConfig)
 		ExpectNoError(err)
 
 		// create scales getter, set GroupVersion and NegotiatedSerializer to default values

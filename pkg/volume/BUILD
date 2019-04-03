@@ -30,9 +30,9 @@ go_library(
         "//staging/src/k8s.io/apimachinery/pkg/util/errors:go_default_library",
         "//staging/src/k8s.io/apimachinery/pkg/util/validation:go_default_library",
         "//staging/src/k8s.io/client-go/kubernetes:go_default_library",
+        "//staging/src/k8s.io/client-go/listers/storage/v1beta1:go_default_library",
         "//staging/src/k8s.io/client-go/tools/record:go_default_library",
         "//staging/src/k8s.io/cloud-provider:go_default_library",
-        "//staging/src/k8s.io/csi-api/pkg/client/clientset/versioned:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
     ],
 )

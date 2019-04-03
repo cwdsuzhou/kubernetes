@@ -37,7 +37,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	utiltesting "k8s.io/client-go/util/testing"
 	cloudprovider "k8s.io/cloud-provider"
-	csiclientset "k8s.io/csi-api/pkg/client/clientset/versioned"
 	"k8s.io/kubernetes/pkg/util/mount"
 	. "k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
@@ -65,7 +64,6 @@ const (
 type fakeVolumeHost struct {
 	rootDir    string
 	kubeClient clientset.Interface
-	csiClient  csiclientset.Interface
 	pluginMgr  VolumePluginMgr
 	cloud      cloudprovider.Interface
 	mounter    mount.Interface
@@ -89,10 +87,9 @@ func NewFakeVolumeHostWithNodeLabels(rootDir string, kubeClient clientset.Interf
 	return volHost
 }
 
-func NewFakeVolumeHostWithCSINodeName(rootDir string, kubeClient clientset.Interface, csiClient csiclientset.Interface, plugins []VolumePlugin, nodeName string) *fakeVolumeHost {
+func NewFakeVolumeHostWithCSINodeName(rootDir string, kubeClient clientset.Interface, plugins []VolumePlugin, nodeName string) *fakeVolumeHost {
 	volHost := newFakeVolumeHost(rootDir, kubeClient, plugins, nil, nil)
 	volHost.nodeName = nodeName
-	volHost.csiClient = csiClient
 	return volHost
 }
 
@@ -138,10 +135,6 @@ func (f *fakeVolumeHost) GetPodPluginDir(podUID types.UID, pluginName string) st
 
 func (f *fakeVolumeHost) GetKubeClient() clientset.Interface {
 	return f.kubeClient
-}
-
-func (f *fakeVolumeHost) GetCSIClient() csiclientset.Interface {
-	return f.csiClient
 }
 
 func (f *fakeVolumeHost) GetCloudProvider() cloudprovider.Interface {
@@ -287,7 +280,7 @@ var _ ProvisionableVolumePlugin = &FakeVolumePlugin{}
 var _ AttachableVolumePlugin = &FakeVolumePlugin{}
 var _ VolumePluginWithAttachLimits = &FakeVolumePlugin{}
 var _ DeviceMountableVolumePlugin = &FakeVolumePlugin{}
-var _ FSResizableVolumePlugin = &FakeVolumePlugin{}
+var _ NodeExpandableVolumePlugin = &FakeVolumePlugin{}
 
 func (plugin *FakeVolumePlugin) getFakeVolume(list *[]*FakeVolume) *FakeVolume {
 	volumeList := *list
@@ -544,8 +537,8 @@ func (plugin *FakeVolumePlugin) RequiresFSResize() bool {
 	return true
 }
 
-func (plugin *FakeVolumePlugin) ExpandFS(spec *Spec, devicePath, deviceMountPath string, _, _ resource.Quantity) error {
-	return nil
+func (plugin *FakeVolumePlugin) NodeExpand(resizeOptions NodeResizeOptions) (bool, error) {
+	return true, nil
 }
 
 func (plugin *FakeVolumePlugin) GetVolumeLimits() (map[string]int64, error) {

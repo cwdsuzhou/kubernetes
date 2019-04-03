@@ -178,6 +178,7 @@ func autoConvert_v1beta1_Rule_To_admissionregistration_Rule(in *v1beta1.Rule, ou
 	out.APIGroups = *(*[]string)(unsafe.Pointer(&in.APIGroups))
 	out.APIVersions = *(*[]string)(unsafe.Pointer(&in.APIVersions))
 	out.Resources = *(*[]string)(unsafe.Pointer(&in.Resources))
+	out.Scope = (*admissionregistration.ScopeType)(unsafe.Pointer(in.Scope))
 	return nil
 }
 
@@ -190,6 +191,7 @@ func autoConvert_admissionregistration_Rule_To_v1beta1_Rule(in *admissionregistr
 	out.APIGroups = *(*[]string)(unsafe.Pointer(&in.APIGroups))
 	out.APIVersions = *(*[]string)(unsafe.Pointer(&in.APIVersions))
 	out.Resources = *(*[]string)(unsafe.Pointer(&in.Resources))
+	out.Scope = (*v1beta1.ScopeType)(unsafe.Pointer(in.Scope))
 	return nil
 }
 
@@ -302,6 +304,7 @@ func autoConvert_v1beta1_Webhook_To_admissionregistration_Webhook(in *v1beta1.We
 	out.NamespaceSelector = (*v1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
 	out.SideEffects = (*admissionregistration.SideEffectClass)(unsafe.Pointer(in.SideEffects))
 	out.TimeoutSeconds = (*int32)(unsafe.Pointer(in.TimeoutSeconds))
+	out.AdmissionReviewVersions = *(*[]string)(unsafe.Pointer(&in.AdmissionReviewVersions))
 	return nil
 }
 
@@ -320,6 +323,7 @@ func autoConvert_admissionregistration_Webhook_To_v1beta1_Webhook(in *admissionr
 	out.NamespaceSelector = (*v1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
 	out.SideEffects = (*v1beta1.SideEffectClass)(unsafe.Pointer(in.SideEffects))
 	out.TimeoutSeconds = (*int32)(unsafe.Pointer(in.TimeoutSeconds))
+	out.AdmissionReviewVersions = *(*[]string)(unsafe.Pointer(&in.AdmissionReviewVersions))
 	return nil
 }
 

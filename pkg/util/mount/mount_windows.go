@@ -378,10 +378,15 @@ func getAllParentLinks(path string) ([]string, error) {
 
 // GetMountRefs : empty implementation here since there is no place to query all mount points on Windows
 func (mounter *Mounter) GetMountRefs(pathname string) ([]string, error) {
-	if _, err := os.Stat(normalizeWindowsPath(pathname)); os.IsNotExist(err) {
+	windowsPath := normalizeWindowsPath(pathname)
+	pathExists, pathErr := PathExists(windowsPath)
+	if !pathExists {
 		return []string{}, nil
-	} else if err != nil {
-		return nil, err
+	} else if IsCorruptedMnt(pathErr) {
+		klog.Warningf("GetMountRefs found corrupted mount at %s, treating as unmounted path", windowsPath)
+		return []string{}, nil
+	} else if pathErr != nil {
+		return nil, fmt.Errorf("error checking path %s: %v", windowsPath, pathErr)
 	}
 	return []string{pathname}, nil
 }

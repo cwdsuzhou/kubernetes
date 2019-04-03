@@ -32,10 +32,6 @@ import (
 	"github.com/prometheus/common/model"
 )
 
-const (
-	testPodNamePrefix = "nvidia-gpu-"
-)
-
 // Serial because the test restarts Kubelet
 var _ = framework.KubeDescribe("NVIDIA GPU Device Plugin [Feature:GPUDevicePlugin][NodeFeature:GPUDevicePlugin][Serial] [Disruptive]", func() {
 	f := framework.NewDefaultFramework("device-plugin-gpus-errors")
@@ -152,7 +148,7 @@ func checkIfNvidiaGPUsExistOnNode() bool {
 }
 
 func logDevicePluginMetrics() {
-	ms, err := metrics.GrabKubeletMetricsWithoutProxy(framework.TestContext.NodeName + ":10255")
+	ms, err := metrics.GrabKubeletMetricsWithoutProxy(framework.TestContext.NodeName+":10255", "/metrics")
 	framework.ExpectNoError(err)
 	for msKey, samples := range ms {
 		switch msKey {

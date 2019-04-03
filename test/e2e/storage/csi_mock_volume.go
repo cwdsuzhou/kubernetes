@@ -24,16 +24,17 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	csiclient "k8s.io/csi-api/pkg/client/clientset/versioned"
+
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/drivers"
@@ -49,17 +50,24 @@ type cleanupFuncs func()
 
 const (
 	csiNodeLimitUpdateTimeout  = 5 * time.Minute
-	csiPodUnschedulableTimeout = 2 * time.Minute
+	csiPodUnschedulableTimeout = 5 * time.Minute
+	csiResizeWaitPeriod        = 5 * time.Minute
+	// how long to wait for Resizing Condition on PVC to appear
+	csiResizingConditionWait = 2 * time.Minute
 )
 
 var _ = utils.SIGDescribe("CSI mock volume", func() {
 	type testParameters struct {
-		attachable      bool
-		attachLimit     int
-		registerDriver  bool
-		podInfoVersion  *string
-		scName          string
-		nodeSelectorKey string
+		disableAttach       bool
+		attachLimit         int
+		registerDriver      bool
+		podInfo             *bool
+		scName              string
+		nodeSelectorKey     string
+		enableResizing      bool // enable resizing for both CSI mock driver and storageClass.
+		enableNodeExpansion bool // enable node expansion for CSI mock driver
+		// just disable resizing on driver it overrides enableResizing flag for CSI mock driver
+		disableResizingOnDriver bool
 	}
 
 	type mockDriverSetup struct {
@@ -85,10 +93,23 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 			sc: make(map[string]*storage.StorageClass),
 			tp: tp,
 		}
-		csics := f.CSIClientSet
+		cs := f.ClientSet
 		var err error
+		driverOpts := drivers.CSIMockDriverOpts{
+			RegisterDriver:      tp.registerDriver,
+			PodInfo:             tp.podInfo,
+			AttachLimit:         tp.attachLimit,
+			DisableAttach:       tp.disableAttach,
+			EnableResizing:      tp.enableResizing,
+			EnableNodeExpansion: tp.enableNodeExpansion,
+		}
 
-		m.driver = drivers.InitMockCSIDriver(tp.registerDriver, tp.attachable, tp.podInfoVersion, tp.attachLimit)
+		// this just disable resizing on driver, keeping resizing on SC enabled.
+		if tp.disableResizingOnDriver {
+			driverOpts.EnableResizing = false
+		}
+
+		m.driver = drivers.InitMockCSIDriver(driverOpts)
 		config, testCleanup := m.driver.PrepareTest(f)
 		m.testCleanups = append(m.testCleanups, testCleanup)
 		m.config = config
@@ -102,10 +123,10 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 		}
 
 		if tp.registerDriver {
-			err = waitForCSIDriver(csics, m.config.GetUniqueDriverName())
+			err = waitForCSIDriver(cs, m.config.GetUniqueDriverName())
 			framework.ExpectNoError(err, "Failed to get CSIDriver : %v", err)
 			m.testCleanups = append(m.testCleanups, func() {
-				destroyCSIDriver(csics, m.config.GetUniqueDriverName())
+				destroyCSIDriver(cs, m.config.GetUniqueDriverName())
 			})
 		}
 	}
@@ -127,6 +148,11 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 		if m.tp.scName != "" {
 			scTest.StorageClassName = m.tp.scName
 		}
+
+		if m.tp.enableResizing {
+			scTest.AllowVolumeExpansion = true
+		}
+
 		nodeSelection := testsuites.NodeSelection{
 			// The mock driver only works when everything runs on a single node.
 			Name: nodeName,
@@ -147,6 +173,23 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 			m.pods = append(m.pods, pod)
 		}
 		return class, claim, pod
+	}
+
+	createPodWithPVC := func(pvc *v1.PersistentVolumeClaim) (*v1.Pod, error) {
+		nodeName := m.config.ClientNodeName
+		nodeSelection := testsuites.NodeSelection{
+			Name: nodeName,
+		}
+		if len(m.nodeLabel) > 0 {
+			nodeSelection = testsuites.NodeSelection{
+				Selector: m.nodeLabel,
+			}
+		}
+		pod, err := startPausePodWithClaim(m.cs, pvc, nodeSelection, f.Namespace.Name)
+		if pod != nil {
+			m.pods = append(m.pods, pod)
+		}
+		return pod, err
 	}
 
 	cleanup := func() {
@@ -187,33 +230,31 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 	}
 
 	// The CSIDriverRegistry feature gate is needed for this test in Kubernetes 1.12.
-	Context("CSI attach test using mock driver [Feature:CSIDriverRegistry]", func() {
+	Context("CSI attach test using mock driver", func() {
 		tests := []struct {
-			name             string
-			driverAttachable bool
-			deployDriverCRD  bool
+			name                   string
+			disableAttach          bool
+			deployClusterRegistrar bool
 		}{
 			{
-				name:             "should not require VolumeAttach for drivers without attachment",
-				driverAttachable: false,
-				deployDriverCRD:  true,
+				name:                   "should not require VolumeAttach for drivers without attachment",
+				disableAttach:          true,
+				deployClusterRegistrar: true,
 			},
 			{
-				name:             "should require VolumeAttach for drivers with attachment",
-				driverAttachable: true,
-				deployDriverCRD:  true,
+				name:                   "should require VolumeAttach for drivers with attachment",
+				deployClusterRegistrar: true,
 			},
 			{
-				name:             "should preserve attachment policy when no CSIDriver present",
-				driverAttachable: true,
-				deployDriverCRD:  false,
+				name:                   "should preserve attachment policy when no CSIDriver present",
+				deployClusterRegistrar: false,
 			},
 		}
 		for _, t := range tests {
 			test := t
 			It(t.name, func() {
 				var err error
-				init(testParameters{registerDriver: test.deployDriverCRD, attachable: test.driverAttachable})
+				init(testParameters{registerDriver: test.deployClusterRegistrar, disableAttach: test.disableAttach})
 				defer cleanup()
 
 				_, claim, pod := createPod()
@@ -230,14 +271,14 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 				_, err = m.cs.StorageV1beta1().VolumeAttachments().Get(attachmentName, metav1.GetOptions{})
 				if err != nil {
 					if errors.IsNotFound(err) {
-						if test.driverAttachable {
+						if !test.disableAttach {
 							framework.ExpectNoError(err, "Expected VolumeAttachment but none was found")
 						}
 					} else {
 						framework.ExpectNoError(err, "Failed to find VolumeAttachment")
 					}
 				}
-				if !test.driverAttachable {
+				if test.disableAttach {
 					Expect(err).To(HaveOccurred(), "Unexpected VolumeAttachment found")
 				}
 			})
@@ -245,56 +286,49 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 		}
 	})
 
-	Context("CSI workload information using mock driver [Feature:CSIDriverRegistry]", func() {
+	Context("CSI workload information using mock driver", func() {
 		var (
-			err            error
-			podInfoV1      = "v1"
-			podInfoUnknown = "unknown"
-			podInfoEmpty   = ""
+			err          error
+			podInfoTrue  = true
+			podInfoFalse = false
 		)
 		tests := []struct {
-			name                  string
-			podInfoOnMountVersion *string
-			deployDriverCRD       bool
-			expectPodInfo         bool
+			name                   string
+			podInfoOnMount         *bool
+			deployClusterRegistrar bool
+			expectPodInfo          bool
 		}{
 			{
-				name:                  "should not be passed when podInfoOnMountVersion=nil",
-				podInfoOnMountVersion: nil,
-				deployDriverCRD:       true,
-				expectPodInfo:         false,
+				name:                   "should not be passed when podInfoOnMount=nil",
+				podInfoOnMount:         nil,
+				deployClusterRegistrar: true,
+				expectPodInfo:          false,
 			},
 			{
-				name:                  "should be passed when podInfoOnMountVersion=v1",
-				podInfoOnMountVersion: &podInfoV1,
-				deployDriverCRD:       true,
-				expectPodInfo:         true,
+				name:                   "should be passed when podInfoOnMount=true",
+				podInfoOnMount:         &podInfoTrue,
+				deployClusterRegistrar: true,
+				expectPodInfo:          true,
 			},
 			{
-				name:                  "should not be passed when podInfoOnMountVersion=<empty string>",
-				podInfoOnMountVersion: &podInfoEmpty,
-				deployDriverCRD:       true,
-				expectPodInfo:         false,
+				name:                   "should not be passed when podInfoOnMount=false",
+				podInfoOnMount:         &podInfoFalse,
+				deployClusterRegistrar: true,
+				expectPodInfo:          false,
 			},
 			{
-				name:                  "should not be passed when podInfoOnMountVersion=<unknown string>",
-				podInfoOnMountVersion: &podInfoUnknown,
-				deployDriverCRD:       true,
-				expectPodInfo:         false,
-			},
-			{
-				name:            "should not be passed when CSIDriver does not exist",
-				deployDriverCRD: false,
-				expectPodInfo:   false,
+				name:                   "should not be passed when CSIDriver does not exist",
+				deployClusterRegistrar: false,
+				expectPodInfo:          false,
 			},
 		}
 		for _, t := range tests {
 			test := t
 			It(t.name, func() {
 				init(testParameters{
-					registerDriver: test.deployDriverCRD,
+					registerDriver: test.deployClusterRegistrar,
 					scName:         "csi-mock-sc-" + f.UniqueName,
-					podInfoVersion: test.podInfoOnMountVersion})
+					podInfo:        test.podInfoOnMount})
 
 				defer cleanup()
 
@@ -319,7 +353,8 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 			// define volume limit to be 2 for this test
 
 			var err error
-			init(testParameters{attachable: true, nodeSelectorKey: "node-attach-limit-csi", attachLimit: 2})
+			nodeSelectorKey := fmt.Sprintf("attach-limit-csi-%s", f.Namespace.Name)
+			init(testParameters{nodeSelectorKey: nodeSelectorKey, attachLimit: 2})
 			defer cleanup()
 			nodeName := m.config.ClientNodeName
 			attachKey := v1.ResourceName(volumeutil.GetCSIAttachLimitKey(m.provisioner))
@@ -344,8 +379,179 @@ var _ = utils.SIGDescribe("CSI mock volume", func() {
 			_, _, pod3 := createPod()
 			Expect(pod3).NotTo(BeNil(), "while creating third pod")
 			err = waitForMaxVolumeCondition(pod3, m.cs)
-			Expect(err).NotTo(HaveOccurred(), "while waiting for max volume condition")
+			Expect(err).NotTo(HaveOccurred(), "while waiting for max volume condition on pod : %+v", pod3)
 		})
+	})
+
+	Context("CSI Volume expansion [Feature:ExpandCSIVolumes]", func() {
+		tests := []struct {
+			name                    string
+			nodeExpansionRequired   bool
+			disableAttach           bool
+			disableResizingOnDriver bool
+			expectFailure           bool
+		}{
+			{
+				name:                  "should expand volume without restarting pod if nodeExpansion=off",
+				nodeExpansionRequired: false,
+			},
+			{
+				name:                  "should expand volume by restarting pod if attach=on, nodeExpansion=on",
+				nodeExpansionRequired: true,
+			},
+			{
+				name:                  "should expand volume by restarting pod if attach=off, nodeExpansion=on",
+				disableAttach:         true,
+				nodeExpansionRequired: true,
+			},
+			{
+				name:                    "should not expand volume if resizingOnDriver=off, resizingOnSC=on",
+				disableResizingOnDriver: true,
+				expectFailure:           true,
+			},
+		}
+		for _, t := range tests {
+			test := t
+			It(t.name, func() {
+				var err error
+				tp := testParameters{
+					enableResizing:          true,
+					enableNodeExpansion:     test.nodeExpansionRequired,
+					disableResizingOnDriver: test.disableResizingOnDriver,
+				}
+				// disabling attach requires drive registration feature
+				if test.disableAttach {
+					tp.disableAttach = true
+					tp.registerDriver = true
+				}
+
+				init(tp)
+				defer cleanup()
+
+				ns := f.Namespace.Name
+				sc, pvc, pod := createPod()
+				Expect(pod).NotTo(BeNil(), "while creating pod for resizing")
+
+				Expect(*sc.AllowVolumeExpansion).To(BeTrue(), "failed creating sc with allowed expansion")
+
+				err = framework.WaitForPodNameRunningInNamespace(m.cs, pod.Name, pod.Namespace)
+				framework.ExpectNoError(err, "Failed to start pod1: %v", err)
+
+				By("Expanding current pvc")
+				newSize := resource.MustParse("6Gi")
+				pvc, err = expandPVCSize(pvc, newSize, m.cs)
+				Expect(err).NotTo(HaveOccurred(), "While updating pvc for more size")
+				Expect(pvc).NotTo(BeNil())
+
+				pvcSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+				if pvcSize.Cmp(newSize) != 0 {
+					framework.Failf("error updating pvc size %q", pvc.Name)
+				}
+				if test.expectFailure {
+					err = waitForResizingCondition(pvc, m.cs, csiResizingConditionWait)
+					Expect(err).To(HaveOccurred(), "unexpected resizing condition on PVC")
+					return
+				}
+
+				By("Waiting for persistent volume resize to finish")
+				err = waitForControllerVolumeResize(pvc, m.cs, csiResizeWaitPeriod)
+				Expect(err).NotTo(HaveOccurred(), "While waiting for CSI PV resize to finish")
+
+				checkPVCSize := func() {
+					By("Waiting for PVC resize to finish")
+					pvc, err = waitForFSResize(pvc, m.cs)
+					Expect(err).NotTo(HaveOccurred(), "while waiting for PVC resize to finish")
+
+					pvcConditions := pvc.Status.Conditions
+					Expect(len(pvcConditions)).To(Equal(0), "pvc should not have conditions")
+				}
+
+				// if node expansion is not required PVC should be resized as well
+				if !test.nodeExpansionRequired {
+					checkPVCSize()
+				} else {
+					By("Checking for conditions on pvc")
+					pvc, err = m.cs.CoreV1().PersistentVolumeClaims(ns).Get(pvc.Name, metav1.GetOptions{})
+					Expect(err).NotTo(HaveOccurred(), "While fetching pvc after controller resize")
+
+					inProgressConditions := pvc.Status.Conditions
+					if len(inProgressConditions) > 0 {
+						Expect(inProgressConditions[0].Type).To(Equal(v1.PersistentVolumeClaimFileSystemResizePending), "pvc must have fs resizing condition")
+					}
+
+					By("Deleting the previously created pod")
+					err = framework.DeletePodWithWait(f, m.cs, pod)
+					Expect(err).NotTo(HaveOccurred(), "while deleting pod for resizing")
+
+					By("Creating a new pod with same volume")
+					pod2, err := createPodWithPVC(pvc)
+					Expect(pod2).NotTo(BeNil(), "while creating pod for csi resizing")
+					Expect(err).NotTo(HaveOccurred(), "while recreating pod for resizing")
+
+					checkPVCSize()
+				}
+			})
+		}
+	})
+	Context("CSI online volume expansion [Feature:ExpandCSIVolumes][Feature:ExpandInUseVolumes]", func() {
+		tests := []struct {
+			name          string
+			disableAttach bool
+		}{
+			{
+				name: "should expand volume without restarting pod if attach=on, nodeExpansion=on",
+			},
+			{
+				name:          "should expand volume without restarting pod if attach=off, nodeExpansion=on",
+				disableAttach: true,
+			},
+		}
+		for _, t := range tests {
+			test := t
+			It(test.name, func() {
+				var err error
+				params := testParameters{enableResizing: true, enableNodeExpansion: true}
+				if test.disableAttach {
+					params.disableAttach = true
+					params.registerDriver = true
+				}
+
+				init(params)
+
+				defer cleanup()
+
+				sc, pvc, pod := createPod()
+				Expect(pod).NotTo(BeNil(), "while creating pod for resizing")
+
+				Expect(*sc.AllowVolumeExpansion).To(BeTrue(), "failed creating sc with allowed expansion")
+
+				err = framework.WaitForPodNameRunningInNamespace(m.cs, pod.Name, pod.Namespace)
+				framework.ExpectNoError(err, "Failed to start pod1: %v", err)
+
+				By("Expanding current pvc")
+				newSize := resource.MustParse("6Gi")
+				pvc, err = expandPVCSize(pvc, newSize, m.cs)
+				Expect(err).NotTo(HaveOccurred(), "While updating pvc for more size")
+				Expect(pvc).NotTo(BeNil())
+
+				pvcSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+				if pvcSize.Cmp(newSize) != 0 {
+					framework.Failf("error updating pvc size %q", pvc.Name)
+				}
+
+				By("Waiting for persistent volume resize to finish")
+				err = waitForControllerVolumeResize(pvc, m.cs, csiResizeWaitPeriod)
+				Expect(err).NotTo(HaveOccurred(), "While waiting for PV resize to finish")
+
+				By("Waiting for PVC resize to finish")
+				pvc, err = waitForFSResize(pvc, m.cs)
+				Expect(err).NotTo(HaveOccurred(), "while waiting for PVC to finish")
+
+				pvcConditions := pvc.Status.Conditions
+				Expect(len(pvcConditions)).To(Equal(0), "pvc should not have conditions")
+
+			})
+		}
 	})
 
 })
@@ -453,6 +659,49 @@ func startPausePod(cs clientset.Interface, t testsuites.StorageClassTest, node t
 	return class, claim, pod
 }
 
+func startPausePodWithClaim(cs clientset.Interface, pvc *v1.PersistentVolumeClaim, node testsuites.NodeSelection, ns string) (*v1.Pod, error) {
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "pvc-volume-tester-",
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:  "volume-tester",
+					Image: imageutils.GetE2EImage(imageutils.Pause),
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      "my-volume",
+							MountPath: "/mnt/test",
+						},
+					},
+				},
+			},
+			RestartPolicy: v1.RestartPolicyNever,
+			Volumes: []v1.Volume{
+				{
+					Name: "my-volume",
+					VolumeSource: v1.VolumeSource{
+						PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvc.Name,
+							ReadOnly:  false,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if node.Name != "" {
+		pod.Spec.NodeName = node.Name
+	}
+	if len(node.Selector) != 0 {
+		pod.Spec.NodeSelector = node.Selector
+	}
+
+	return cs.CoreV1().Pods(ns).Create(pod)
+}
+
 // checkPodInfo tests that NodePublish was called with expected volume_context
 func checkPodInfo(cs clientset.Interface, namespace, driverPodName, driverContainerName string, pod *v1.Pod, expectPodInfo bool) error {
 	expectedAttributes := map[string]string{
@@ -515,12 +764,12 @@ func checkPodInfo(cs clientset.Interface, namespace, driverPodName, driverContai
 	}
 }
 
-func waitForCSIDriver(csics csiclient.Interface, driverName string) error {
-	timeout := 2 * time.Minute
+func waitForCSIDriver(cs clientset.Interface, driverName string) error {
+	timeout := 4 * time.Minute
 
 	framework.Logf("waiting up to %v for CSIDriver %q", timeout, driverName)
 	for start := time.Now(); time.Since(start) < timeout; time.Sleep(framework.Poll) {
-		_, err := csics.CsiV1alpha1().CSIDrivers().Get(driverName, metav1.GetOptions{})
+		_, err := cs.StorageV1beta1().CSIDrivers().Get(driverName, metav1.GetOptions{})
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -528,13 +777,13 @@ func waitForCSIDriver(csics csiclient.Interface, driverName string) error {
 	return fmt.Errorf("gave up after waiting %v for CSIDriver %q.", timeout, driverName)
 }
 
-func destroyCSIDriver(csics csiclient.Interface, driverName string) {
-	driverGet, err := csics.CsiV1alpha1().CSIDrivers().Get(driverName, metav1.GetOptions{})
+func destroyCSIDriver(cs clientset.Interface, driverName string) {
+	driverGet, err := cs.StorageV1beta1().CSIDrivers().Get(driverName, metav1.GetOptions{})
 	if err == nil {
 		framework.Logf("deleting %s.%s: %s", driverGet.TypeMeta.APIVersion, driverGet.TypeMeta.Kind, driverGet.ObjectMeta.Name)
 		// Uncomment the following line to get full dump of CSIDriver object
 		// framework.Logf("%s", framework.PrettyPrint(driverGet))
-		csics.CsiV1alpha1().CSIDrivers().Delete(driverName, nil)
+		cs.StorageV1beta1().CSIDrivers().Delete(driverName, nil)
 	}
 }
 
