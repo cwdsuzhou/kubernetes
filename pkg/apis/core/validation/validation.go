@@ -1863,15 +1863,16 @@ func ValidatePersistentVolumeClaimUpdate(newPvc, oldPvc *core.PersistentVolumeCl
 		// volumeName changes are allowed once.
 		oldPvcClone.Spec.VolumeName = newPvcClone.Spec.VolumeName
 	}
-
-	if validateStorageClassUpgrade(oldPvcClone.Annotations, newPvcClone.Annotations,
-		oldPvcClone.Spec.StorageClassName, newPvcClone.Spec.StorageClassName) {
-		newPvcClone.Spec.StorageClassName = nil
-		metav1.SetMetaDataAnnotation(&newPvcClone.ObjectMeta, core.BetaStorageClassAnnotation, oldPvcClone.Annotations[core.BetaStorageClassAnnotation])
-	} else {
-		// storageclass annotation should be immutable after creation
-		// TODO: remove Beta when no longer needed
-		allErrs = append(allErrs, ValidateImmutableAnnotation(newPvc.ObjectMeta.Annotations[v1.BetaStorageClassAnnotation], oldPvc.ObjectMeta.Annotations[v1.BetaStorageClassAnnotation], v1.BetaStorageClassAnnotation, field.NewPath("metadata"))...)
+	if len(oldPvc.Spec.VolumeName) != 0 {
+		if validateStorageClassUpgrade(oldPvcClone.Annotations, newPvcClone.Annotations,
+			oldPvcClone.Spec.StorageClassName, newPvcClone.Spec.StorageClassName) {
+			newPvcClone.Spec.StorageClassName = nil
+			metav1.SetMetaDataAnnotation(&newPvcClone.ObjectMeta, core.BetaStorageClassAnnotation, oldPvcClone.Annotations[core.BetaStorageClassAnnotation])
+		} else {
+			// storageclass annotation should be immutable after creation
+			// TODO: remove Beta when no longer needed
+			allErrs = append(allErrs, ValidateImmutableAnnotation(newPvc.ObjectMeta.Annotations[v1.BetaStorageClassAnnotation], oldPvc.ObjectMeta.Annotations[v1.BetaStorageClassAnnotation], v1.BetaStorageClassAnnotation, field.NewPath("metadata"))...)
+		}
 	}
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.ExpandPersistentVolumes) {
@@ -1891,10 +1892,20 @@ func ValidatePersistentVolumeClaimUpdate(newPvc, oldPvc *core.PersistentVolumeCl
 		}
 
 	} else {
-		// changes to Spec are not allowed, but updates to label/and some annotations are OK.
-		// no-op updates pass validation.
-		if !apiequality.Semantic.DeepEqual(newPvcClone.Spec, oldPvcClone.Spec) {
-			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "field is immutable after creation"))
+		if len(oldPvcClone.Spec.VolumeName) != 0 {
+			if oldPvcClone.Spec.StorageClassName == nil && newPvcClone.Spec.StorageClassName != nil ||
+				oldPvcClone.Spec.StorageClassName != nil && newPvcClone.Spec.StorageClassName == nil ||
+				oldPvcClone.Spec.StorageClassName != nil &&
+					newPvcClone.Spec.StorageClassName != nil &&
+					*(oldPvcClone.Spec.StorageClassName) == *(newPvcClone.Spec.
+						StorageClassName) {
+				// changes to Spec are not allowed, but updates to label/and some annotations are OK.
+				// no-op updates pass validation.
+				if !apiequality.Semantic.DeepEqual(newPvcClone.Spec, oldPvcClone.Spec) {
+					allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "field is immutable after creation"))
+				}
+			}
+
 		}
 	}
 
@@ -4570,7 +4581,7 @@ func ValidateSecret(secret *core.Secret) field.ErrorList {
 			allErrs = append(allErrs, field.Required(field.NewPath("metadata", "annotations").Key(core.ServiceAccountNameKey), ""))
 		}
 	case core.SecretTypeOpaque, "":
-	// no-op
+		// no-op
 	case core.SecretTypeDockercfg:
 		dockercfgBytes, exists := secret.Data[core.DockerConfigKey]
 		if !exists {
@@ -4616,7 +4627,7 @@ func ValidateSecret(secret *core.Secret) field.ErrorList {
 		if _, exists := secret.Data[core.TLSPrivateKeyKey]; !exists {
 			allErrs = append(allErrs, field.Required(dataPath.Key(core.TLSPrivateKeyKey), ""))
 		}
-	// TODO: Verify that the key matches the cert.
+		// TODO: Verify that the key matches the cert.
 	default:
 		// no-op
 	}

@@ -1082,6 +1082,17 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 			},
 		},
 	})
+	validClaimStorageClassBoundVolumeName := testVolumeClaimStorageClass("foo", "ns", "fast", core.PersistentVolumeClaimSpec{
+		VolumeName: "foo",
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
 	validClaimAnnotation := testVolumeClaimAnnotation("foo", "ns", "description", "foo-description", core.PersistentVolumeClaimSpec{
 		AccessModes: []core.PersistentVolumeAccessMode{
 			core.ReadOnlyMany,
@@ -1250,6 +1261,18 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 		},
 	})
 
+	validClaimStorageClassInSpecBoundVolumeName := testVolumeClaimStorageClassInSpec("foo", "ns", "fast", core.PersistentVolumeClaimSpec{
+		VolumeName: "foo",
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
+
 	invalidClaimStorageClassInSpec := testVolumeClaimStorageClassInSpec("foo", "ns", "fast2", core.PersistentVolumeClaimSpec{
 		AccessModes: []core.PersistentVolumeAccessMode{
 			core.ReadOnlyMany,
@@ -1261,8 +1284,9 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 		},
 	})
 
-	validClaimStorageClassInAnnotationAndSpec := testVolumeClaimStorageClassInAnnotationAndSpec(
+	validClaimStorageClassInAnnotationAndSpecBoundVolumeName := testVolumeClaimStorageClassInAnnotationAndSpec(
 		"foo", "ns", "fast", "fast", core.PersistentVolumeClaimSpec{
+			VolumeName: "foo",
 			AccessModes: []core.PersistentVolumeAccessMode{
 				core.ReadOnlyMany,
 			},
@@ -1398,9 +1422,23 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 			enableResize:      false,
 			enableBlock:       false,
 		},
+		"valid-update-change-storage-class-annotation-after-creation": {
+			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          invalidUpdateClaimStorageClass,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"valid-update-change-storage-class-annotation-after-creation-not-bound": {
+			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          invalidUpdateClaimStorageClass,
+			enableResize:      false,
+			enableBlock:       false,
+		},
 		"invalid-update-change-storage-class-annotation-after-creation": {
 			isExpectedFailure: true,
-			oldClaim:          validClaimStorageClass,
+			oldClaim:          validClaimStorageClassBoundVolumeName,
 			newClaim:          invalidUpdateClaimStorageClass,
 			enableResize:      false,
 			enableBlock:       false,
@@ -1449,6 +1487,13 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 		},
 		"valid-upgrade-storage-class-annotation-to-spec": {
 			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClassBoundVolumeName,
+			newClaim:          validClaimStorageClassInSpecBoundVolumeName,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-annotation-to-spec-not-bound": {
+			isExpectedFailure: true,
 			oldClaim:          validClaimStorageClass,
 			newClaim:          validClaimStorageClassInSpec,
 			enableResize:      false,
@@ -1463,8 +1508,15 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 		},
 		"valid-upgrade-storage-class-annotation-to-annotation-and-spec": {
 			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClassBoundVolumeName,
+			newClaim:          validClaimStorageClassInAnnotationAndSpecBoundVolumeName,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-annotation-to-annotation-and-spec-not-bound": {
+			isExpectedFailure: true,
 			oldClaim:          validClaimStorageClass,
-			newClaim:          validClaimStorageClassInAnnotationAndSpec,
+			newClaim:          validClaimStorageClassInAnnotationAndSpecBoundVolumeName,
 			enableResize:      false,
 			enableBlock:       false,
 		},
