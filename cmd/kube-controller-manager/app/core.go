@@ -189,6 +189,10 @@ func startRouteController(ctx ControllerContext) (http.Handler, bool, error) {
 }
 
 func startPersistentVolumeBinderController(ctx ControllerContext) (http.Handler, bool, error) {
+	if ctx.ComponentConfig.PersistentVolumeBinderController.VolumeOperationMaxBackoff.Duration < time.Second {
+		return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option pv-max-backoff-time")
+	}
+
 	params := persistentvolumecontroller.ControllerParameters{
 		KubeClient:                ctx.ClientBuilder.ClientOrDie("persistent-volume-binder"),
 		SyncPeriod:                ctx.ComponentConfig.PersistentVolumeBinderController.PVClaimBinderSyncPeriod.Duration,
@@ -214,6 +218,9 @@ func startPersistentVolumeBinderController(ctx ControllerContext) (http.Handler,
 func startAttachDetachController(ctx ControllerContext) (http.Handler, bool, error) {
 	if ctx.ComponentConfig.AttachDetachController.ReconcilerSyncLoopPeriod.Duration < time.Second {
 		return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option reconcile-sync-loop-period")
+	}
+	if ctx.ComponentConfig.AttachDetachController.VolumeOperationMaxBackoff.Duration < time.Second {
+		return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option attach-detach-max-backoff-time")
 	}
 
 	attachDetachController, attachDetachControllerErr :=
@@ -242,6 +249,9 @@ func startAttachDetachController(ctx ControllerContext) (http.Handler, bool, err
 
 func startVolumeExpandController(ctx ControllerContext) (http.Handler, bool, error) {
 	if utilfeature.DefaultFeatureGate.Enabled(features.ExpandPersistentVolumes) {
+		if ctx.ComponentConfig.ExpandController.VolumeOperationMaxBackoff.Duration < time.Second {
+			return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option expand-max-backoff-time")
+		}
 		expandController, expandControllerErr := expand.NewExpandController(
 			ctx.ClientBuilder.ClientOrDie("expand-controller"),
 			ctx.InformerFactory.Core().V1().PersistentVolumeClaims(),
