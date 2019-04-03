@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -43,7 +44,6 @@ import (
 	"k8s.io/kubernetes/pkg/master/ports"
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	utiltaints "k8s.io/kubernetes/pkg/util/taints"
-	"time"
 )
 
 const defaultRootDir = "/var/lib/kubelet"
@@ -259,6 +259,9 @@ func ValidateKubeletFlags(f *KubeletFlags) error {
 	if f.NodeStatusMaxImages < -1 {
 		return fmt.Errorf("invalid configuration: NodeStatusMaxImages (--node-status-max-images) must be -1 or greater")
 	}
+	if f.VolumeOperationMaxBackOff.Duration < time.Second {
+		return fmt.Errorf("invalid configuration: VolumeOperationMaxBackOff (--volume-operation-max-backoff-time) must be 1s or greater")
+	}
 
 	unknownLabels := sets.NewString()
 	for k := range f.NodeLabels {
@@ -427,7 +430,7 @@ func (f *KubeletFlags) AddFlags(mainfs *pflag.FlagSet) {
 	fs.StringVar(&f.SeccompProfileRoot, "seccomp-profile-root", f.SeccompProfileRoot, "<Warning: Alpha feature> Directory path for seccomp profiles.")
 	fs.StringVar(&f.BootstrapCheckpointPath, "bootstrap-checkpoint-path", f.BootstrapCheckpointPath, "<Warning: Alpha feature> Path to the directory where the checkpoints are stored")
 	fs.Int32Var(&f.NodeStatusMaxImages, "node-status-max-images", f.NodeStatusMaxImages, "<Warning: Alpha feature> The maximum number of images to report in Node.Status.Images. If -1 is specified, no cap will be applied.")
-	fs.DurationVar(&f.VolumeOperationMaxBackOff.Duration, "volume-operation-max-backoff-time", 30 * time.Second, "<Warning: Alpha feature> The maximum backoff time of volume operation. If it is not specified, it will not be applied.")
+	fs.DurationVar(&f.VolumeOperationMaxBackOff.Duration, "volume-operation-max-backoff-time", 30*time.Second, "<Warning: Alpha feature> The maximum backoff time of volume operation. If it is not specified, it will not be applied.")
 
 	// DEPRECATED FLAGS
 	fs.BoolVar(&f.Containerized, "containerized", f.Containerized, "Running kubelet in a container.")
