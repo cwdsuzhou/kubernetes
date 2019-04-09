@@ -76,7 +76,6 @@ func SetDefaults_KubeControllerManagerConfiguration(obj *kubectrlmgrconfigv1alph
 	deploymentconfigv1alpha1.RecommendedDefaultDeploymentControllerConfiguration(&obj.DeploymentController)
 	// Use the default RecommendedDefaultEndpointControllerConfiguration options
 	endpointconfigv1alpha1.RecommendedDefaultEndpointControllerConfiguration(&obj.EndpointController)
-	// Use the default RecommendedDefaultGenericControllerManagerConfiguration options
 	// Use the default RecommendedDefaultExpandControllerConfiguration options
 	expandconfigv1alpha1.RecommendedDefaultExpandControllerConfiguration(&obj.ExpandController)
 	// Use the default RecommendedDefaultGenericControllerManagerConfiguration options
