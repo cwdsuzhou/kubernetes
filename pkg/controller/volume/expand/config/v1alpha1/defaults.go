@@ -35,6 +35,6 @@ import (
 func RecommendedDefaultExpandControllerConfiguration(obj *kubectrlmgrconfigv1alpha1.ExpandControllerConfiguration) {
 	zero := metav1.Duration{}
 	if obj.VolumeOperationMaxBackoff == zero {
-		obj.VolumeOperationMaxBackoff = metav1.Duration{Duration: 30 * time.Second}
+		obj.VolumeOperationMaxBackoff = metav1.Duration{Duration: 2*time.Minute + 2*time.Second}
 	}
 }
