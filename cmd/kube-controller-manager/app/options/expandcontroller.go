@@ -35,7 +35,7 @@ func (o *ExpandControllerOptions) AddFlags(fs *pflag.FlagSet) {
 		return
 	}
 
-	fs.DurationVar(&o.VolumeOperationMaxBackoff.Duration, "expand-max-backoff-time", 30*time.Second, "<Warning: Alpha feature> The maximum backoff time of expand. If it is not specified, it will not be applied.")
+	fs.DurationVar(&o.VolumeOperationMaxBackoff.Duration, "expand-max-backoff-time", 2*time.Minute+2*time.Second, "<Warning: Alpha feature> The maximum backoff time of expand. If it is not specified, it will not be applied.")
 }
 
 // ApplyTo fills up ExpandController config with options.
