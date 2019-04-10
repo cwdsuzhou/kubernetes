@@ -174,7 +174,7 @@ type KubeletFlags struct {
 	// This is an experimental, short-term flag to help with node scalability.
 	NodeStatusMaxImages int32
 	// volumeOperationMaxBackOff sets max backoff to volume options, e.g. attach, verify.
-	// Defaults to 30s
+	// Defaults to 2minutes+2seconds
 	VolumeOperationMaxBackOff metav1.Duration
 
 	// DEPRECATED FLAGS
@@ -247,6 +247,8 @@ func NewKubeletFlags() *KubeletFlags {
 		AllowPrivileged: true,
 		// prior to the introduction of this flag, there was a hardcoded cap of 50 images
 		NodeStatusMaxImages: 50,
+		// set the default value to it was
+		VolumeOperationMaxBackOff: metav1.Duration{Duration: 2*time.Minute + 2*time.Second},
 	}
 }
 
@@ -430,7 +432,7 @@ func (f *KubeletFlags) AddFlags(mainfs *pflag.FlagSet) {
 	fs.StringVar(&f.SeccompProfileRoot, "seccomp-profile-root", f.SeccompProfileRoot, "<Warning: Alpha feature> Directory path for seccomp profiles.")
 	fs.StringVar(&f.BootstrapCheckpointPath, "bootstrap-checkpoint-path", f.BootstrapCheckpointPath, "<Warning: Alpha feature> Path to the directory where the checkpoints are stored")
 	fs.Int32Var(&f.NodeStatusMaxImages, "node-status-max-images", f.NodeStatusMaxImages, "<Warning: Alpha feature> The maximum number of images to report in Node.Status.Images. If -1 is specified, no cap will be applied.")
-	fs.DurationVar(&f.VolumeOperationMaxBackOff.Duration, "volume-operation-max-backoff-time", 2*time.Minute+2*time.Second, "<Warning: Alpha feature> The maximum backoff time of volume operation. If it is not specified, it will not be applied.")
+	fs.DurationVar(&f.VolumeOperationMaxBackOff.Duration, "volume-operation-max-backoff-time", f.VolumeOperationMaxBackOff.Duration, "<Warning: Alpha feature> The maximum backoff time of volume operation, default 2minutes+2seconds.")
 
 	// DEPRECATED FLAGS
 	fs.BoolVar(&f.Containerized, "containerized", f.Containerized, "Running kubelet in a container.")
