@@ -432,7 +432,7 @@ func (f *KubeletFlags) AddFlags(mainfs *pflag.FlagSet) {
 	fs.StringVar(&f.SeccompProfileRoot, "seccomp-profile-root", f.SeccompProfileRoot, "<Warning: Alpha feature> Directory path for seccomp profiles.")
 	fs.StringVar(&f.BootstrapCheckpointPath, "bootstrap-checkpoint-path", f.BootstrapCheckpointPath, "<Warning: Alpha feature> Path to the directory where the checkpoints are stored")
 	fs.Int32Var(&f.NodeStatusMaxImages, "node-status-max-images", f.NodeStatusMaxImages, "<Warning: Alpha feature> The maximum number of images to report in Node.Status.Images. If -1 is specified, no cap will be applied.")
-	fs.DurationVar(&f.VolumeOperationMaxBackOff.Duration, "volume-operation-max-backoff-time", f.VolumeOperationMaxBackOff.Duration, "<Warning: Alpha feature> The maximum backoff time of volume operation, default 2minutes+2seconds.")
+	fs.DurationVar(&f.VolumeOperationMaxBackOff.Duration, "volume-operation-max-backoff-time", f.VolumeOperationMaxBackOff.Duration, "The maximum backoff time of volume operation, default 2minutes+2seconds.")
 
 	// DEPRECATED FLAGS
 	fs.BoolVar(&f.Containerized, "containerized", f.Containerized, "Running kubelet in a container.")
