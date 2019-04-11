@@ -52,6 +52,7 @@ filegroup(
     srcs = [
         ":package-srcs",
         "//pkg/controller/volume/expand/cache:all-srcs",
+        "//pkg/controller/volume/expand/config:all-srcs",
     ],
     tags = ["automanaged"],
 )
