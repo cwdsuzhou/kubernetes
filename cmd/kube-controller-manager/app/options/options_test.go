@@ -136,8 +136,6 @@ func TestAddFlags(t *testing.T) {
 		"--bind-address=192.168.4.21",
 		"--secure-port=10001",
 		"--concurrent-ttl-after-finished-syncs=8",
-		"--attachdetach-max-backoff-time=30s",
-		"--expand-max-backoff-time=30s",
 	}
 	fs.Parse(args)
 	// Sort GCIgnoredResources because it's built from a map, which means the
@@ -199,7 +197,7 @@ func TestAddFlags(t *testing.T) {
 			&attachdetachconfig.AttachDetachControllerConfiguration{
 				ReconcilerSyncLoopPeriod:          metav1.Duration{Duration: 30 * time.Second},
 				DisableAttachDetachReconcilerSync: true,
-				VolumeOperationMaxBackoff:         metav1.Duration{Duration: 30 * time.Second},
+				VolumeOperationMaxBackoff:         metav1.Duration{Duration: 2*time.Minute + 2*time.Second},
 			},
 		},
 		CSRSigningController: &CSRSigningControllerOptions{
@@ -233,7 +231,7 @@ func TestAddFlags(t *testing.T) {
 		},
 		ExpandController: &ExpandControllerOptions{
 			&expandconfig.ExpandControllerConfiguration{
-				VolumeOperationMaxBackoff: metav1.Duration{Duration: 30 * time.Second},
+				VolumeOperationMaxBackoff: metav1.Duration{Duration: 2*time.Minute + 2*time.Second},
 			},
 		},
 		GarbageCollectorController: &GarbageCollectorControllerOptions{
@@ -287,7 +285,8 @@ func TestAddFlags(t *testing.T) {
 		},
 		PersistentVolumeBinderController: &PersistentVolumeBinderControllerOptions{
 			&persistentvolumeconfig.PersistentVolumeBinderControllerConfiguration{
-				PVClaimBinderSyncPeriod: metav1.Duration{Duration: 30 * time.Second},
+				PVClaimBinderSyncPeriod:   metav1.Duration{Duration: 30 * time.Second},
+				VolumeOperationMaxBackoff: metav1.Duration{Duration: 2*time.Minute + 2*time.Second},
 				VolumeConfiguration: persistentvolumeconfig.VolumeConfiguration{
 					EnableDynamicProvisioning:  false,
 					EnableHostPathProvisioning: true,
