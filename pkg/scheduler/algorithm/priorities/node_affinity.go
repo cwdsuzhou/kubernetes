@@ -18,6 +18,8 @@ package priorities
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -44,7 +46,10 @@ func CalculateNodeAffinityPriorityMap(pod *v1.Pod, meta interface{}, nodeInfo *s
 		affinity = priorityMeta.affinity
 	}
 
-	var count int32
+	var count = new(int32)
+	var selectError error
+	var wg sync.WaitGroup
+
 	// A nil element of PreferredDuringSchedulingIgnoredDuringExecution matches no objects.
 	// An element of PreferredDuringSchedulingIgnoredDuringExecution that refers to an
 	// empty PreferredSchedulingTerm matches all objects.
@@ -56,20 +61,38 @@ func CalculateNodeAffinityPriorityMap(pod *v1.Pod, meta interface{}, nodeInfo *s
 				continue
 			}
 
-			// TODO: Avoid computing it for all nodes if this becomes a performance problem.
-			nodeSelector, err := v1helper.NodeSelectorRequirementsAsSelector(preferredSchedulingTerm.Preference.MatchExpressions)
-			if err != nil {
-				return schedulerapi.HostPriority{}, err
+			if selectError != nil {
+				return schedulerapi.HostPriority{}, selectError
 			}
-			if nodeSelector.Matches(labels.Set(node.Labels)) {
-				count += preferredSchedulingTerm.Weight
-			}
+			wg.Add(1)
+			go func() {
+				wg.Done()
+				if selectError != nil {
+					return
+				}
+				// TODO: Avoid computing it for all nodes if this becomes a performance problem.
+				nodeSelector, err := v1helper.NodeSelectorRequirementsAsSelector(preferredSchedulingTerm.Preference.MatchExpressions)
+				// Not need to add lock since any error happen this func should return
+				if err != nil {
+					selectError = err
+				}
+				if nodeSelector.Matches(labels.Set(node.Labels)) {
+					atomic.AddInt32(count, preferredSchedulingTerm.Weight)
+				}
+				return
+			}()
 		}
+	}
+
+	wg.Wait()
+
+	if selectError != nil {
+		return schedulerapi.HostPriority{}, selectError
 	}
 
 	return schedulerapi.HostPriority{
 		Host:  node.Name,
-		Score: int(count),
+		Score: int(*count),
 	}, nil
 }
 
