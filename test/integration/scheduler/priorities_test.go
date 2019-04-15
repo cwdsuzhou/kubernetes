@@ -39,9 +39,12 @@ func TestNodeAffinity(t *testing.T) {
 	}
 	// Add a label to one of the nodes.
 	labeledNode := nodes[1]
-	labelKey := "kubernetes.io/node-topologyKey"
-	labelValue := "topologyvalue"
+	topoKey := "kubernetes.io/node-topologyKey"
+	topoValue := "topologyvalue"
+	labelKey := "service"
+	labelValue := "S1"
 	labels := map[string]string{
+		topoKey:  topoValue,
 		labelKey: labelValue,
 	}
 	if err = testutils.AddLabelsToNode(context.clientSet, labeledNode.Name, labels); err != nil {
@@ -65,6 +68,19 @@ func TestNodeAffinity(t *testing.T) {
 									Key:      labelKey,
 									Operator: v1.NodeSelectorOpIn,
 									Values:   []string{labelValue},
+								},
+							},
+						},
+						Weight: 20,
+
+					},
+					{
+						Preference: v1.NodeSelectorTerm{
+							MatchExpressions: []v1.NodeSelectorRequirement{
+								{
+									Key:      topoKey,
+									Operator: v1.NodeSelectorOpIn,
+									Values:   []string{topoValue},
 								},
 							},
 						},
