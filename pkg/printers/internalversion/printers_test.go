@@ -29,7 +29,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -66,12 +66,12 @@ var testData = TestStruct{
 }
 
 type TestStruct struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Key               string         `json:"Key"`
-	Map               map[string]int `json:"Map"`
-	StringList        []string       `json:"StringList"`
-	IntList           []int          `json:"IntList"`
+	metav1.TypeMeta           `json:",inline"`
+	metav1.ObjectMeta         `json:"metadata,omitempty"`
+	Key        string         `json:"Key"`
+	Map        map[string]int `json:"Map"`
+	StringList []string       `json:"StringList"`
+	IntList    []int          `json:"IntList"`
 }
 
 func (in *TestStruct) DeepCopyObject() runtime.Object {
@@ -652,7 +652,7 @@ func TestPrintEventsResultSorted(t *testing.T) {
 		t.Fatalf("An error occurred printing the EventList: %#v", err)
 	}
 	out := buffer.String()
-	VerifyDatesInOrder(out, "\n" /* rowDelimiter */, "  " /* columnDelimiter */, t)
+	VerifyDatesInOrder(out, "\n" /* rowDelimiter */ , "  " /* columnDelimiter */ , t)
 }
 
 func TestPrintNodeStatus(t *testing.T) {
@@ -1476,32 +1476,32 @@ func TestPrintPodTable(t *testing.T) {
 		ignoreLegacy bool
 	}{
 		{
-			obj: runningPod, opts: printers.PrintOptions{},
+			obj:    runningPod, opts: printers.PrintOptions{},
 			expect: "NAME\tREADY\tSTATUS\tRESTARTS\tAGE\ntest1\t1/2\tRunning\t6\t<unknown>\n",
 		},
 		{
-			obj: runningPod, opts: printers.PrintOptions{WithKind: true, Kind: schema.GroupKind{Kind: "Pod"}},
+			obj:    runningPod, opts: printers.PrintOptions{WithKind: true, Kind: schema.GroupKind{Kind: "Pod"}},
 			expect: "NAME\tREADY\tSTATUS\tRESTARTS\tAGE\npod/test1\t1/2\tRunning\t6\t<unknown>\n",
 		},
 		{
-			obj: runningPod, opts: printers.PrintOptions{ShowLabels: true},
+			obj:    runningPod, opts: printers.PrintOptions{ShowLabels: true},
 			expect: "NAME\tREADY\tSTATUS\tRESTARTS\tAGE\tLABELS\ntest1\t1/2\tRunning\t6\t<unknown>\ta=1,b=2\n",
 		},
 		{
-			obj: &api.PodList{Items: []api.Pod{*runningPod, *failedPod}}, opts: printers.PrintOptions{ColumnLabels: []string{"a"}},
+			obj:    &api.PodList{Items: []api.Pod{*runningPod, *failedPod}}, opts: printers.PrintOptions{ColumnLabels: []string{"a"}},
 			expect: "NAME\tREADY\tSTATUS\tRESTARTS\tAGE\tA\ntest1\t1/2\tRunning\t6\t<unknown>\t1\ntest2\t1/2\tFailed\t6\t<unknown>\t\n",
 		},
 		{
-			obj: runningPod, opts: printers.PrintOptions{NoHeaders: true},
+			obj:    runningPod, opts: printers.PrintOptions{NoHeaders: true},
 			expect: "test1\t1/2\tRunning\t6\t<unknown>\n",
 		},
 		{
-			obj: failedPod, opts: printers.PrintOptions{},
+			obj:          failedPod, opts: printers.PrintOptions{},
 			expect:       "NAME\tREADY\tSTATUS\tRESTARTS\tAGE\ntest2\t1/2\tFailed\t6\t<unknown>\n",
 			ignoreLegacy: true, // filtering is not done by the printer in the legacy path
 		},
 		{
-			obj: failedPod, opts: printers.PrintOptions{},
+			obj:    failedPod, opts: printers.PrintOptions{},
 			expect: "NAME\tREADY\tSTATUS\tRESTARTS\tAGE\ntest2\t1/2\tFailed\t6\t<unknown>\n",
 		},
 	}
@@ -3246,6 +3246,7 @@ func TestPrintReplicaSet(t *testing.T) {
 }
 
 func TestPrintPersistentVolumeClaim(t *testing.T) {
+	volumeMode := api.PersistentVolumeFilesystem
 	myScn := "my-scn"
 	tests := []struct {
 		pvc    api.PersistentVolumeClaim
@@ -3259,6 +3260,7 @@ func TestPrintPersistentVolumeClaim(t *testing.T) {
 				},
 				Spec: api.PersistentVolumeClaimSpec{
 					VolumeName: "my-volume",
+					VolumeMode: &volumeMode,
 				},
 				Status: api.PersistentVolumeClaimStatus{
 					Phase:       api.ClaimBound,
@@ -3268,7 +3270,7 @@ func TestPrintPersistentVolumeClaim(t *testing.T) {
 					},
 				},
 			},
-			"test1\tBound\tmy-volume\t4Gi\tROX\t\t<unknown>\n",
+			"test1\tBound\tmy-volume\t4Gi\tROX\t\tFilesystem\t<unknown>\n",
 		},
 		{
 			// Test name, num of containers, restarts, container ready status
@@ -3276,7 +3278,9 @@ func TestPrintPersistentVolumeClaim(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test2",
 				},
-				Spec: api.PersistentVolumeClaimSpec{},
+				Spec: api.PersistentVolumeClaimSpec{
+					VolumeMode: &volumeMode,
+				},
 				Status: api.PersistentVolumeClaimStatus{
 					Phase:       api.ClaimLost,
 					AccessModes: []api.PersistentVolumeAccessMode{api.ReadOnlyMany},
@@ -3285,7 +3289,7 @@ func TestPrintPersistentVolumeClaim(t *testing.T) {
 					},
 				},
 			},
-			"test2\tLost\t\t\t\t\t<unknown>\n",
+			"test2\tLost\t\t\t\t\tFilesystem\t<unknown>\n",
 		},
 		{
 			// Test name, num of containers, restarts, container ready status
@@ -3295,6 +3299,7 @@ func TestPrintPersistentVolumeClaim(t *testing.T) {
 				},
 				Spec: api.PersistentVolumeClaimSpec{
 					VolumeName: "my-volume",
+					VolumeMode: &volumeMode,
 				},
 				Status: api.PersistentVolumeClaimStatus{
 					Phase:       api.ClaimPending,
@@ -3304,13 +3309,34 @@ func TestPrintPersistentVolumeClaim(t *testing.T) {
 					},
 				},
 			},
-			"test3\tPending\tmy-volume\t10Gi\tRWX\t\t<unknown>\n",
+			"test3\tPending\tmy-volume\t10Gi\tRWX\t\tFilesystem\t<unknown>\n",
 		},
 		{
 			// Test name, num of containers, restarts, container ready status
 			api.PersistentVolumeClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test4",
+				},
+				Spec: api.PersistentVolumeClaimSpec{
+					VolumeName:       "my-volume",
+					StorageClassName: &myScn,
+					VolumeMode:       &volumeMode,
+				},
+				Status: api.PersistentVolumeClaimStatus{
+					Phase:       api.ClaimPending,
+					AccessModes: []api.PersistentVolumeAccessMode{api.ReadWriteOnce},
+					Capacity: map[api.ResourceName]resource.Quantity{
+						api.ResourceStorage: resource.MustParse("10Gi"),
+					},
+				},
+			},
+			"test4\tPending\tmy-volume\t10Gi\tRWO\tmy-scn\tFilesystem\t<unknown>\n",
+		},
+		{
+			// Test name, num of containers, restarts, container ready status
+			api.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test5",
 				},
 				Spec: api.PersistentVolumeClaimSpec{
 					VolumeName:       "my-volume",
@@ -3324,7 +3350,7 @@ func TestPrintPersistentVolumeClaim(t *testing.T) {
 					},
 				},
 			},
-			"test4\tPending\tmy-volume\t10Gi\tRWO\tmy-scn\t<unknown>\n",
+			"test5\tPending\tmy-volume\t10Gi\tRWO\tmy-scn\t<unset>\t<unknown>\n",
 		},
 	}
 	buf := bytes.NewBuffer([]byte{})
