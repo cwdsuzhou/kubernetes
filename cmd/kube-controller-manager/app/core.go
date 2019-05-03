@@ -190,7 +190,7 @@ func startRouteController(ctx ControllerContext) (http.Handler, bool, error) {
 
 func startPersistentVolumeBinderController(ctx ControllerContext) (http.Handler, bool, error) {
 	if ctx.ComponentConfig.PersistentVolumeBinderController.VolumeOperationMaxBackoff.Duration < time.Second {
-		return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option pv-max-backoff-time")
+		return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option volume-operation-max-backoff-time")
 	}
 
 	params := persistentvolumecontroller.ControllerParameters{
@@ -219,9 +219,6 @@ func startAttachDetachController(ctx ControllerContext) (http.Handler, bool, err
 	if ctx.ComponentConfig.AttachDetachController.ReconcilerSyncLoopPeriod.Duration < time.Second {
 		return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option reconcile-sync-loop-period")
 	}
-	if ctx.ComponentConfig.AttachDetachController.VolumeOperationMaxBackoff.Duration < time.Second {
-		return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option attach-detach-max-backoff-time")
-	}
 
 	attachDetachController, attachDetachControllerErr :=
 		attachdetach.NewAttachDetachController(
@@ -238,7 +235,7 @@ func startAttachDetachController(ctx ControllerContext) (http.Handler, bool, err
 			ctx.ComponentConfig.AttachDetachController.DisableAttachDetachReconcilerSync,
 			ctx.ComponentConfig.AttachDetachController.ReconcilerSyncLoopPeriod.Duration,
 			attachdetach.DefaultTimerConfig,
-			ctx.ComponentConfig.AttachDetachController.VolumeOperationMaxBackoff.Duration,
+			ctx.ComponentConfig.PersistentVolumeBinderController.VolumeOperationMaxBackoff.Duration,
 		)
 	if attachDetachControllerErr != nil {
 		return nil, true, fmt.Errorf("failed to start attach/detach controller: %v", attachDetachControllerErr)
@@ -249,16 +246,13 @@ func startAttachDetachController(ctx ControllerContext) (http.Handler, bool, err
 
 func startVolumeExpandController(ctx ControllerContext) (http.Handler, bool, error) {
 	if utilfeature.DefaultFeatureGate.Enabled(features.ExpandPersistentVolumes) {
-		if ctx.ComponentConfig.ExpandController.VolumeOperationMaxBackoff.Duration < time.Second {
-			return nil, true, fmt.Errorf("duration time must be greater than one second as set via command line option expand-max-backoff-time")
-		}
 		expandController, expandControllerErr := expand.NewExpandController(
 			ctx.ClientBuilder.ClientOrDie("expand-controller"),
 			ctx.InformerFactory.Core().V1().PersistentVolumeClaims(),
 			ctx.InformerFactory.Core().V1().PersistentVolumes(),
 			ctx.Cloud,
 			ProbeExpandableVolumePlugins(ctx.ComponentConfig.PersistentVolumeBinderController.VolumeConfiguration),
-			ctx.ComponentConfig.ExpandController.VolumeOperationMaxBackoff.Duration)
+			ctx.ComponentConfig.PersistentVolumeBinderController.VolumeOperationMaxBackoff.Duration)
 
 		if expandControllerErr != nil {
 			return nil, true, fmt.Errorf("failed to start volume expand controller : %v", expandControllerErr)
