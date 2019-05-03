@@ -325,7 +325,7 @@ func newTestKubeletWithImageList(
 		kubelet.recorder,
 		false, /* experimentalCheckNodeCapabilitiesBeforeMount*/
 		false, /* keepTerminatedPodVolumes */
-		30*time.Second)
+		30*time.Second /* maxBackoffTime */)
 
 	kubelet.setNodeStatusFuncs = kubelet.defaultNodeStatusFuncs()
 
