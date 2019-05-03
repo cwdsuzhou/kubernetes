@@ -49,7 +49,6 @@ import (
 	serviceaccountconfig "k8s.io/kubernetes/pkg/controller/serviceaccount/config"
 	ttlafterfinishedconfig "k8s.io/kubernetes/pkg/controller/ttlafterfinished/config"
 	attachdetachconfig "k8s.io/kubernetes/pkg/controller/volume/attachdetach/config"
-	expandconfig "k8s.io/kubernetes/pkg/controller/volume/expand/config"
 	persistentvolumeconfig "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/config"
 )
 
@@ -197,7 +196,6 @@ func TestAddFlags(t *testing.T) {
 			&attachdetachconfig.AttachDetachControllerConfiguration{
 				ReconcilerSyncLoopPeriod:          metav1.Duration{Duration: 30 * time.Second},
 				DisableAttachDetachReconcilerSync: true,
-				VolumeOperationMaxBackoff:         metav1.Duration{Duration: 2*time.Minute + 2*time.Second},
 			},
 		},
 		CSRSigningController: &CSRSigningControllerOptions{
@@ -227,11 +225,6 @@ func TestAddFlags(t *testing.T) {
 		EndpointController: &EndpointControllerOptions{
 			&endpointconfig.EndpointControllerConfiguration{
 				ConcurrentEndpointSyncs: 10,
-			},
-		},
-		ExpandController: &ExpandControllerOptions{
-			&expandconfig.ExpandControllerConfiguration{
-				VolumeOperationMaxBackoff: metav1.Duration{Duration: 2*time.Minute + 2*time.Second},
 			},
 		},
 		GarbageCollectorController: &GarbageCollectorControllerOptions{

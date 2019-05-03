@@ -29,6 +29,4 @@ type AttachDetachControllerConfiguration struct {
 	// ReconcilerSyncLoopPeriod is the amount of time the reconciler sync states loop
 	// wait between successive executions. Is set to 5 sec by default.
 	ReconcilerSyncLoopPeriod metav1.Duration
-	// VolumeOperationMaxBackoff is the max backOff time of volume operations
-	VolumeOperationMaxBackoff metav1.Duration
 }

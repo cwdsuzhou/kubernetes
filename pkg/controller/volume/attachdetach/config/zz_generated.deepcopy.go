@@ -24,7 +24,6 @@ package config
 func (in *AttachDetachControllerConfiguration) DeepCopyInto(out *AttachDetachControllerConfiguration) {
 	*out = *in
 	out.ReconcilerSyncLoopPeriod = in.ReconcilerSyncLoopPeriod
-	out.VolumeOperationMaxBackoff = in.VolumeOperationMaxBackoff
 	return
 }
 

@@ -108,9 +108,6 @@ type KubeControllerManagerConfiguration struct {
 	// EndpointControllerConfiguration holds configuration for EndpointController
 	// related features.
 	EndpointController EndpointControllerConfiguration
-	// ExpandControllerConfiguration holds configuration for ExpandController
-	// related features.
-	ExpandController ExpandControllerConfiguration
 	// GarbageCollectorControllerConfiguration holds configuration for
 	// GarbageCollectorController related features.
 	GarbageCollectorController GarbageCollectorControllerConfiguration
@@ -222,8 +219,6 @@ type AttachDetachControllerConfiguration struct {
 	// ReconcilerSyncLoopPeriod is the amount of time the reconciler sync states loop
 	// wait between successive executions. Is set to 5 sec by default.
 	ReconcilerSyncLoopPeriod metav1.Duration
-	// VolumeOperationMaxBackoff is the max backOff time of volume operations
-	VolumeOperationMaxBackoff metav1.Duration
 }
 
 // CloudProviderConfiguration contains basically elements about cloud provider.
@@ -284,12 +279,6 @@ type EndpointControllerConfiguration struct {
 	// that will be done concurrently. Larger number = faster endpoint updating,
 	// but more CPU (and network) load.
 	ConcurrentEndpointSyncs int32
-}
-
-// ExpandControllerConfiguration contains elements describing ExpandController.
-type ExpandControllerConfiguration struct {
-	// VolumeOperationMaxBackoff is the max backOff time of volume operations
-	VolumeOperationMaxBackoff metav1.Duration
 }
 
 // GarbageCollectorControllerConfiguration contains elements describing GarbageCollectorController.

@@ -82,7 +82,7 @@ func Test_NewGoRoutineMap_Positive_TwoOps(t *testing.T) {
 
 func Test_NewGoRoutineMap_Positive_SingleOpWithExpBackoff(t *testing.T) {
 	// Arrange
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 	operationName := "operation-name"
 	operation := func() error { return nil }
 
@@ -129,7 +129,7 @@ func Test_NewGoRoutineMap_Positive_SecondOpAfterFirstCompletes(t *testing.T) {
 
 func Test_NewGoRoutineMap_Positive_SecondOpAfterFirstCompletesWithExpBackoff(t *testing.T) {
 	// Arrange
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 	operationName := "operation-name"
 	operation1DoneCh := make(chan interface{}, 0 /* bufferSize */)
 	operation1 := generateCallbackFunc(operation1DoneCh)
@@ -191,7 +191,7 @@ func Test_NewGoRoutineMap_Positive_SecondOpAfterFirstPanics(t *testing.T) {
 
 func Test_NewGoRoutineMap_Positive_SecondOpAfterFirstPanicsWithExpBackoff(t *testing.T) {
 	// Arrange
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 	operationName := "operation-name"
 	operation1 := generatePanicFunc()
 	err1 := grm.Run(operationName, operation1)
@@ -245,7 +245,7 @@ func Test_NewGoRoutineMap_Negative_SecondOpBeforeFirstCompletes(t *testing.T) {
 
 func Test_NewGoRoutineMap_Negative_SecondOpBeforeFirstCompletesWithExpBackoff(t *testing.T) {
 	// Arrange
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 	operationName := "operation-name"
 	operation1DoneCh := make(chan interface{}, 0 /* bufferSize */)
 	operation1 := generateWaitFunc(operation1DoneCh)
@@ -313,7 +313,7 @@ func Test_NewGoRoutineMap_Positive_ThirdOpAfterFirstCompletes(t *testing.T) {
 
 func Test_NewGoRoutineMap_Positive_ThirdOpAfterFirstCompletesWithExpBackoff(t *testing.T) {
 	// Arrange
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 	operationName := "operation-name"
 	operation1DoneCh := make(chan interface{}, 0 /* bufferSize */)
 	operation1 := generateWaitFunc(operation1DoneCh)
@@ -377,7 +377,7 @@ func Test_NewGoRoutineMap_Positive_WaitEmpty(t *testing.T) {
 func Test_NewGoRoutineMap_Positive_WaitEmptyWithExpBackoff(t *testing.T) {
 	// Test than Wait() on empty GoRoutineMap always succeeds without blocking
 	// Arrange
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 
 	// Act
 	waitDoneCh := make(chan interface{}, 1)
@@ -425,7 +425,7 @@ func Test_NewGoRoutineMap_Positive_Wait(t *testing.T) {
 func Test_NewGoRoutineMap_Positive_WaitWithExpBackoff(t *testing.T) {
 	// Test that Wait() really blocks until the last operation succeeds
 	// Arrange
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 	operationName := "operation-name"
 	operation1DoneCh := make(chan interface{}, 0 /* bufferSize */)
 	operation1 := generateWaitFunc(operation1DoneCh)
@@ -452,7 +452,7 @@ func Test_NewGoRoutineMap_Positive_WaitWithExpBackoff(t *testing.T) {
 }
 
 func Test_NewGoRoutineMap_WaitForCompletionWithExpBackoff(t *testing.T) {
-	grm := NewGoRoutineMap(true, volumeOperationMaxBackoff)
+	grm := NewGoRoutineMap(true /* exponentialBackOffOnError */, volumeOperationMaxBackoff)
 	operationName := "operation-err"
 
 	operation1DoneCh := make(chan interface{}, 0 /* bufferSize */)

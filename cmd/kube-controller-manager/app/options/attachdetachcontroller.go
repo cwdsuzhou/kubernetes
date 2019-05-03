@@ -35,7 +35,6 @@ func (o *AttachDetachControllerOptions) AddFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&o.DisableAttachDetachReconcilerSync, "disable-attach-detach-reconcile-sync", false, "Disable volume attach detach reconciler sync. Disabling this may cause volumes to be mismatched with pods. Use wisely.")
 	fs.DurationVar(&o.ReconcilerSyncLoopPeriod.Duration, "attach-detach-reconcile-sync-period", o.ReconcilerSyncLoopPeriod.Duration, "The reconciler sync wait time between volume attach detach. This duration must be larger than one second, and increasing this value from the default may allow for volumes to be mismatched with pods.")
-	fs.DurationVar(&o.VolumeOperationMaxBackoff.Duration, "attach-detach-max-backoff-time", o.VolumeOperationMaxBackoff.Duration, "The maximum backoff time of attach/detach operation, defaults to 2minutes+2seconds.")
 }
 
 // ApplyTo fills up AttachDetachController config with options.
@@ -46,7 +45,6 @@ func (o *AttachDetachControllerOptions) ApplyTo(cfg *attachdetachconfig.AttachDe
 
 	cfg.DisableAttachDetachReconcilerSync = o.DisableAttachDetachReconcilerSync
 	cfg.ReconcilerSyncLoopPeriod = o.ReconcilerSyncLoopPeriod
-	cfg.VolumeOperationMaxBackoff = o.VolumeOperationMaxBackoff
 
 	return nil
 }
