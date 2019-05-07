@@ -657,9 +657,9 @@ func (pm *VolumePluginMgr) FindPluginBySpec(spec *Spec) (VolumePlugin, error) {
 	}
 
 	pm.refreshProbedPlugins()
-	for _, plugin := range pm.probedPlugins {
+	for pluginName, plugin := range pm.probedPlugins {
 		if plugin.CanSupport(spec) {
-			matchedPluginNames = append(matchedPluginNames, plugin.GetPluginName())
+			matchedPluginNames = append(matchedPluginNames, pluginName)
 			matches = append(matches, plugin)
 		}
 	}
@@ -714,16 +714,16 @@ func (pm *VolumePluginMgr) FindPluginByName(name string) (VolumePlugin, error) {
 	matchedPluginNames := []string{}
 	matches := []VolumePlugin{}
 	for k, v := range pm.plugins {
-		if v.GetPluginName() == name {
+		if k == name {
 			matchedPluginNames = append(matchedPluginNames, k)
 			matches = append(matches, v)
 		}
 	}
 
 	pm.refreshProbedPlugins()
-	for _, plugin := range pm.probedPlugins {
-		if plugin.GetPluginName() == name {
-			matchedPluginNames = append(matchedPluginNames, plugin.GetPluginName())
+	for pluginName, plugin := range pm.probedPlugins {
+		if pluginName == name {
+			matchedPluginNames = append(matchedPluginNames, pluginName)
 			matches = append(matches, plugin)
 		}
 	}
