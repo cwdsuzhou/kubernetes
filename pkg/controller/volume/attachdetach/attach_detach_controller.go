@@ -25,6 +25,7 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/api/core/v1"
+	storage "k8s.io/api/storage/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,7 +42,7 @@ import (
 	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
-	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/cloud-provider"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
@@ -107,6 +108,7 @@ func NewAttachDetachController(
 	pvInformer coreinformers.PersistentVolumeInformer,
 	csiNodeInformer storageinformers.CSINodeInformer,
 	csiDriverInformer storageinformers.CSIDriverInformer,
+	vaInformer storageinformers.VolumeAttachmentInformer,
 	cloud cloudprovider.Interface,
 	plugins []volume.VolumePlugin,
 	prober volume.DynamicPluginProber,
@@ -138,8 +140,11 @@ func NewAttachDetachController(
 		podIndexer:  podInformer.Informer().GetIndexer(),
 		nodeLister:  nodeInformer.Lister(),
 		nodesSynced: nodeInformer.Informer().HasSynced,
+		vaLister:    vaInformer.Lister(),
+		vaSynced:    vaInformer.Informer().HasSynced,
 		cloud:       cloud,
 		pvcQueue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pvcs"),
+		vaQueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "vas"),
 	}
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) &&
@@ -223,6 +228,11 @@ func NewAttachDetachController(
 		},
 	})
 
+	vaInformer.Informer().AddEventHandler(kcache.ResourceEventHandlerFuncs{
+		AddFunc:    adc.vaAdd,
+		UpdateFunc: adc.vaUpdate,
+	})
+
 	return adc, nil
 }
 
@@ -283,6 +293,11 @@ type attachDetachController struct {
 	csiDriverLister  storagelisters.CSIDriverLister
 	csiDriversSynced kcache.InformerSynced
 
+	// vaLister and va synced are used to garbage collector
+	// See https://github.com/kubernetes/kubernetes/issues/77324
+	vaLister storagelisters.VolumeAttachmentLister
+	vaSynced kcache.InformerSynced
+
 	// cloud provider used by volume host
 	cloud cloudprovider.Interface
 
@@ -326,16 +341,20 @@ type attachDetachController struct {
 
 	// pvcQueue is used to queue pvc objects
 	pvcQueue workqueue.RateLimitingInterface
+
+	// vaQueue is used to queue va objects
+	vaQueue workqueue.RateLimitingInterface
 }
 
 func (adc *attachDetachController) Run(stopCh <-chan struct{}) {
 	defer runtime.HandleCrash()
 	defer adc.pvcQueue.ShutDown()
+	defer adc.vaQueue.ShutDown()
 
 	klog.Infof("Starting attach detach controller")
 	defer klog.Infof("Shutting down attach detach controller")
 
-	synced := []kcache.InformerSynced{adc.podsSynced, adc.nodesSynced, adc.pvcsSynced, adc.pvsSynced}
+	synced := []kcache.InformerSynced{adc.podsSynced, adc.nodesSynced, adc.pvcsSynced, adc.pvsSynced, adc.vaSynced}
 	if adc.csiNodeSynced != nil {
 		synced = append(synced, adc.csiNodeSynced)
 	}
@@ -358,12 +377,14 @@ func (adc *attachDetachController) Run(stopCh <-chan struct{}) {
 	go adc.reconciler.Run(stopCh)
 	go adc.desiredStateOfWorldPopulator.Run(stopCh)
 	go wait.Until(adc.pvcWorker, time.Second, stopCh)
+	go wait.Until(adc.vaWorker, time.Second, stopCh)
 	metrics.Register(adc.pvcLister,
 		adc.pvLister,
 		adc.podLister,
 		adc.actualStateOfWorld,
 		adc.desiredStateOfWorld,
-		&adc.volumePluginMgr)
+		&adc.volumePluginMgr,
+		adc.vaLister)
 
 	<-stopCh
 }
@@ -384,13 +405,49 @@ func (adc *attachDetachController) populateActualStateOfWorld() error {
 			// volume spec is not needed to detach a volume. If the volume is used by a pod, it
 			// its spec can be: this would happen during in the populateDesiredStateOfWorld which
 			// scans the pods and updates their volumes in the ActualStateOfWorld too.
-			err = adc.actualStateOfWorld.MarkVolumeAsAttached(uniqueName, nil /* VolumeSpec */, nodeName, attachedVolume.DevicePath)
+			err = adc.actualStateOfWorld.MarkVolumeAsAttached(uniqueName, nil /* VolumeSpec */ , nodeName, attachedVolume.DevicePath)
 			if err != nil {
 				klog.Errorf("Failed to mark the volume as attached: %v", err)
 				continue
 			}
 			adc.processVolumesInUse(nodeName, node.Status.VolumesInUse)
 			adc.addNodeToDswp(node, types.NodeName(node.Name))
+		}
+	}
+
+	vas, err := adc.vaLister.List(labels.Everything())
+	if err != nil {
+		return err
+	}
+	volumesToAttach := adc.desiredStateOfWorld.GetVolumesToAttach()
+	if len(volumesToAttach) == 0 {
+		klog.Warning("get empty volumes to attach")
+	}
+	for _, va := range vas {
+		nodeName := types.NodeName(va.Spec.NodeName)
+		if va.Spec.Source.PersistentVolumeName == nil {
+			continue
+		}
+		volumeName := *va.Spec.Source.PersistentVolumeName
+		pv, err := adc.pvLister.Get(volumeName)
+		if err != nil {
+			klog.Errorf("Can not found pv %q", volumeName)
+		}
+		found := false
+
+		for _, volumeToAttach := range volumesToAttach {
+			if volumeToAttach.NodeName == nodeName && volumeToAttach.VolumeName == v1.UniqueVolumeName(volumeName) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume: pv} /* VolumeSpec */ ,
+				nodeName)
+			if err != nil {
+				klog.Errorf("Failed to mark the volume as attached: %v", err)
+				continue
+			}
 		}
 	}
 	return nil
@@ -576,6 +633,18 @@ func (adc *attachDetachController) nodeDelete(obj interface{}) {
 	adc.processVolumesInUse(nodeName, node.Status.VolumesInUse)
 }
 
+func (adc *attachDetachController) vaAdd(obj interface{}) {
+	va, ok := obj.(*storage.VolumeAttachment)
+	if va == nil || !ok {
+		return
+	}
+	adc.enqueuePVC(&va)
+}
+
+func (adc *attachDetachController) vaUpdate(oldObj, newObj interface{}) {
+	adc.vaAdd(newObj)
+}
+
 func (adc *attachDetachController) enqueuePVC(obj interface{}) {
 	key, err := kcache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
@@ -585,19 +654,32 @@ func (adc *attachDetachController) enqueuePVC(obj interface{}) {
 	adc.pvcQueue.Add(key)
 }
 
+func (adc *attachDetachController) enqueueVA(obj interface{}) {
+	va, ok := obj.(*storage.VolumeAttachment)
+	if  !ok {
+		return
+	}
+	adc.vaQueue.Add(va.Name)
+}
+
 // pvcWorker processes items from pvcQueue
 func (adc *attachDetachController) pvcWorker() {
-	for adc.processNextItem() {
+	for adc.processNextPVCItem() {
 	}
 }
 
-func (adc *attachDetachController) processNextItem() bool {
+// pvcWorker processes items from vaQueue
+func (adc *attachDetachController) vaWorker() {
+	for adc.processNextVAItem() {
+	}
+}
+
+func (adc *attachDetachController) processNextPVCItem() bool {
 	keyObj, shutdown := adc.pvcQueue.Get()
 	if shutdown {
 		return false
 	}
 	defer adc.pvcQueue.Done(keyObj)
-
 	if err := adc.syncPVCByKey(keyObj.(string)); err != nil {
 		// Rather than wait for a full resync, re-add the key to the
 		// queue to be processed.
@@ -609,6 +691,26 @@ func (adc *attachDetachController) processNextItem() bool {
 	// Finally, if no error occurs we Forget this item so it does not
 	// get queued again until another change happens.
 	adc.pvcQueue.Forget(keyObj)
+	return true
+}
+
+func (adc *attachDetachController) processNextVAItem() bool {
+	keyObj, shutdown := adc.vaQueue.Get()
+	if shutdown {
+		return false
+	}
+	defer adc.vaQueue.Done(keyObj)
+	if err := adc.syncVAByKey(keyObj.(string)); err != nil {
+		// Rather than wait for a full resync, re-add the key to the
+		// queue to be processed.
+		adc.vaQueue.AddRateLimited(keyObj)
+		runtime.HandleError(fmt.Errorf("Failed to sync va %q, will retry again: %v", keyObj.(string), err))
+		return true
+	}
+
+	// Finally, if no error occurs we Forget this item so it does not
+	// get queued again until another change happens.
+	adc.vaQueue.Forget(keyObj)
 	return true
 }
 
@@ -650,6 +752,52 @@ func (adc *attachDetachController) syncPVCByKey(key string) error {
 		util.ProcessPodVolumes(pod, volumeActionFlag, /* addVolumes */
 			adc.desiredStateOfWorld, &adc.volumePluginMgr, adc.pvcLister, adc.pvLister)
 	}
+	return nil
+}
+
+func (adc *attachDetachController) syncVAByKey(key string) error {
+	klog.V(5).Infof("syncVAByKey[%s]", key)
+	va, err := adc.vaLister.Get(key)
+	if apierrors.IsNotFound(err) {
+		klog.V(4).Infof("error getting pvc %q from informer: %v", key, err)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if va.Spec.NodeName == "" || va.Spec.Source.PersistentVolumeName == nil {
+		// Skip unbound VAs.
+		return nil
+	}
+
+	nodeName := types.NodeName(va.Spec.NodeName)
+	volumeName := *va.Spec.Source.PersistentVolumeName
+
+	volumesToAttach := adc.desiredStateOfWorld.GetVolumesToAttach()
+	if len(volumesToAttach) == 0 {
+		fmt.Errorf("can not get volumes to attach")
+	}
+	pv, err := adc.pvLister.Get(volumeName)
+	if err != nil {
+		return fmt.Errorf("Can not found pv %q", volumeName)
+	}
+	found := false
+	for _, volumeToAttach := range volumesToAttach {
+		if volumeToAttach.NodeName == nodeName && volumeToAttach.VolumeName == v1.UniqueVolumeName(volumeName) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume:pv},
+			nodeName)
+		if err != nil {
+			klog.Errorf("Failed to mark the volume as attached: %v", err)
+			return err
+		}
+	}
+
 	return nil
 }
 

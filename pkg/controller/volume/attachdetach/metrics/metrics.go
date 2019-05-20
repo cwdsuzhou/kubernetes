@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/labels"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	storagelisters "k8s.io/client-go/listers/storage/v1beta1"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/util"
@@ -55,14 +56,16 @@ func Register(pvcLister corelisters.PersistentVolumeClaimLister,
 	podLister corelisters.PodLister,
 	asw cache.ActualStateOfWorld,
 	dsw cache.DesiredStateOfWorld,
-	pluginMgr *volume.VolumePluginMgr) {
+	pluginMgr *volume.VolumePluginMgr,
+	vaLister storagelisters.VolumeAttachmentLister) {
 	registerMetrics.Do(func() {
 		prometheus.MustRegister(newAttachDetachStateCollector(pvcLister,
 			podLister,
 			pvLister,
 			asw,
 			dsw,
-			pluginMgr))
+			pluginMgr,
+			vaLister))
 		prometheus.MustRegister(forcedDetachMetricCounter)
 	})
 }
@@ -74,6 +77,7 @@ type attachDetachStateCollector struct {
 	asw             cache.ActualStateOfWorld
 	dsw             cache.DesiredStateOfWorld
 	volumePluginMgr *volume.VolumePluginMgr
+	vaLister        storagelisters.VolumeAttachmentLister
 }
 
 // volumeCount is a map of maps used as a counter, e.g.:
@@ -98,8 +102,9 @@ func newAttachDetachStateCollector(
 	pvLister corelisters.PersistentVolumeLister,
 	asw cache.ActualStateOfWorld,
 	dsw cache.DesiredStateOfWorld,
-	pluginMgr *volume.VolumePluginMgr) *attachDetachStateCollector {
-	return &attachDetachStateCollector{pvcLister, podLister, pvLister, asw, dsw, pluginMgr}
+	pluginMgr *volume.VolumePluginMgr,
+	vaLister storagelisters.VolumeAttachmentLister) *attachDetachStateCollector {
+	return &attachDetachStateCollector{pvcLister, podLister, pvLister, asw, dsw, pluginMgr, vaLister}
 }
 
 // Check if our collector implements necessary collector interface

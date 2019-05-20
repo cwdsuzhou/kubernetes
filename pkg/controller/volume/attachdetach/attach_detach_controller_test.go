@@ -46,6 +46,7 @@ func Test_NewAttachDetachController_Positive(t *testing.T) {
 		informerFactory.Core().V1().PersistentVolumes(),
 		informerFactory.Storage().V1beta1().CSINodes(),
 		informerFactory.Storage().V1beta1().CSIDrivers(),
+		informerFactory.Storage().V1beta1().VolumeAttachments(),
 		nil, /* cloud */
 		nil, /* plugins */
 		nil, /* prober */
@@ -67,6 +68,7 @@ func Test_AttachDetachControllerStateOfWolrdPopulators_Positive(t *testing.T) {
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	pvcInformer := informerFactory.Core().V1().PersistentVolumeClaims()
 	pvInformer := informerFactory.Core().V1().PersistentVolumes()
+	vaInformer := informerFactory.Storage().V1beta1().VolumeAttachments()
 
 	adc := &attachDetachController{
 		kubeClient:  fakeKubeClient,
@@ -78,6 +80,8 @@ func Test_AttachDetachControllerStateOfWolrdPopulators_Positive(t *testing.T) {
 		podsSynced:  podInformer.Informer().HasSynced,
 		nodeLister:  nodeInformer.Lister(),
 		nodesSynced: nodeInformer.Informer().HasSynced,
+		vaLister:    vaInformer.Lister(),
+		vaSynced:    vaInformer.Informer().HasSynced,
 		cloud:       nil,
 	}
 
@@ -222,6 +226,7 @@ func attachDetachRecoveryTestCase(t *testing.T, extraPods1 []*v1.Pod, extraPods2
 		informerFactory.Core().V1().PersistentVolumes(),
 		informerFactory.Storage().V1beta1().CSINodes(),
 		informerFactory.Storage().V1beta1().CSIDrivers(),
+		informerFactory.Storage().V1beta1().VolumeAttachments(),
 		nil, /* cloud */
 		plugins,
 		prober,

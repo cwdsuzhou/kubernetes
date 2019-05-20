@@ -312,6 +312,9 @@ func (asw *actualStateOfWorld) AddVolumeNode(
 			devicePath:      devicePath,
 		}
 	} else {
+		if len(devicePath) == 0 {
+
+		}
 		// If volume object already exists, it indicates that the information would be out of date.
 		// Update the fields for volume object except the nodes attached to the volumes.
 		volumeObj.devicePath = devicePath

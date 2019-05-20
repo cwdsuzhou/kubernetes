@@ -113,7 +113,8 @@ func TestVolumesInUseMetricCollection(t *testing.T) {
 		pvLister,
 		nil,
 		nil,
-		fakeVolumePluginMgr)
+		fakeVolumePluginMgr,
+		nil)
 	nodeUseMap := metricCollector.getVolumeInUseCount()
 	if len(nodeUseMap) < 1 {
 		t.Errorf("Expected one volume in use got %d", len(nodeUseMap))
@@ -151,7 +152,8 @@ func TestTotalVolumesMetricCollection(t *testing.T) {
 		nil,
 		asw,
 		dsw,
-		fakeVolumePluginMgr)
+		fakeVolumePluginMgr,
+		nil)
 
 	totalVolumesMap := metricCollector.getTotalVolumesCount()
 	if len(totalVolumesMap) != 2 {
