@@ -28,7 +28,7 @@ import (
 
 	"k8s.io/klog"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,6 +41,7 @@ import (
 const (
 	persistentVolumeInGlobalPath = "pv"
 	globalMountInGlobalPath      = "globalmount"
+	unknowVolID                  = "Unknow"
 )
 
 type csiAttacher struct {

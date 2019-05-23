@@ -31,6 +31,7 @@ import (
 	"k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/operationexecutor"
 	"k8s.io/kubernetes/pkg/volume/util/types"
+	"k8s.io/klog"
 )
 
 // DesiredStateOfWorld defines a set of thread-safe operations supported on
@@ -90,7 +91,7 @@ type DesiredStateOfWorld interface {
 	VolumeExists(volumeName v1.UniqueVolumeName, nodeName k8stypes.NodeName) bool
 
 	// GetVolumesToAttach generates and returns a list of volumes to attach
-	// and the nodes they should be attached to based on the current desired
+	// and the nodes they should `be attached to based on the current desired
 	// state of the world.
 	GetVolumesToAttach() []VolumeToAttach
 
@@ -222,7 +223,7 @@ func (dsw *desiredStateOfWorld) AddPod(
 			"no node with the name %q exists in the list of managed nodes",
 			nodeName)
 	}
-
+	klog.Infof("Received pod %+v volume %+v", podToAdd, volumeSpec)
 	attachableVolumePlugin, err := dsw.volumePluginMgr.FindAttachablePluginBySpec(volumeSpec)
 	if err != nil || attachableVolumePlugin == nil {
 		return "", fmt.Errorf(

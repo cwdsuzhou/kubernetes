@@ -218,6 +218,7 @@ func ProcessPodVolumes(pod *v1.Pod, addVolumes bool, desiredStateOfWorld cache.D
 
 		uniquePodName := util.GetUniquePodName(pod)
 		if addVolumes {
+			klog.Infof("Add pod %s, volume %+v", pod, volumeSpec)
 			// Add volume to desired state of world
 			_, err := desiredStateOfWorld.AddPod(
 				uniquePodName, pod, volumeSpec, nodeName)

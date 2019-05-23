@@ -432,7 +432,7 @@ func createAdClients(ns *v1.Namespace, t *testing.T, server *httptest.Server, sy
 		informers.Core().V1().PersistentVolumes(),
 		informers.Storage().V1beta1().CSINodes(),
 		informers.Storage().V1beta1().CSIDrivers(),
-		informers.Storage().V1beta1().VolumeAttachments(),
+		informers.Storage().V1().VolumeAttachments(),
 		cloud,
 		plugins,
 		nil, /* prober */

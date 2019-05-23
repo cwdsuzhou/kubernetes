@@ -175,7 +175,10 @@ func (rc *reconciler) reconcile() {
 	// pods that are rescheduled to a different node are detached first.
 
 	// Ensure volumes that should be detached are detached.
-	for _, attachedVolume := range rc.actualStateOfWorld.GetAttachedVolumes() {
+
+	attachedVolumes := rc.actualStateOfWorld.GetAttachedVolumes()
+	klog.Infof("rc.actualStateOfWorld.GetAttachedVolumes() %+v", attachedVolumes)
+	for _, attachedVolume := range attachedVolumes {
 		if !rc.desiredStateOfWorld.VolumeExists(
 			attachedVolume.VolumeName, attachedVolume.NodeName) {
 			// Don't even try to start an operation if there is already one running
@@ -186,6 +189,7 @@ func (rc *reconciler) reconcile() {
 				klog.V(10).Infof("Operation for volume %q is already running. Can't start detach for %q", attachedVolume.VolumeName, attachedVolume.NodeName)
 				continue
 			}
+			klog.Infof("Start operation actualStateOfWorld.SetDetachRequestTime")
 
 			// Set the detach request time
 			elapsedTime, err := rc.actualStateOfWorld.SetDetachRequestTime(attachedVolume.VolumeName, attachedVolume.NodeName)
@@ -200,7 +204,7 @@ func (rc *reconciler) reconcile() {
 				klog.V(5).Infof(attachedVolume.GenerateMsgDetailed("Cannot detach volume because it is still mounted", ""))
 				continue
 			}
-
+			klog.Infof("Start actualStateOfWorld.RemoveVolumeFromReportAsAttached")
 			// Before triggering volume detach, mark volume as detached and update the node status
 			// If it fails to update node status, skip detach volume
 			err = rc.actualStateOfWorld.RemoveVolumeFromReportAsAttached(attachedVolume.VolumeName, attachedVolume.NodeName)
@@ -210,6 +214,7 @@ func (rc *reconciler) reconcile() {
 					attachedVolume.NodeName,
 					err)
 			}
+			klog.Infof("Start nodeStatusUpdater.UpdateNodeStatuses")
 
 			// Update Node Status to indicate volume is no longer safe to mount.
 			err = rc.nodeStatusUpdater.UpdateNodeStatuses()
@@ -218,6 +223,7 @@ func (rc *reconciler) reconcile() {
 				klog.Errorf(attachedVolume.GenerateErrorDetailed("UpdateNodeStatuses failed while attempting to report volume as attached", err).Error())
 				continue
 			}
+			klog.Infof("Start attacherDetacher.DetachVolume")
 
 			// Trigger detach volume which requires verifing safe to detach step
 			// If timeout is true, skip verifySafeToDetach check

@@ -25,7 +25,7 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/api/core/v1"
-	storage "k8s.io/api/storage/v1beta1"
+	storage "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,11 +34,13 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	storageinformers "k8s.io/client-go/informers/storage/v1beta1"
+	storageinformersv1 "k8s.io/client-go/informers/storage/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	storagelisters "k8s.io/client-go/listers/storage/v1beta1"
+	storagelistersv1 "k8s.io/client-go/listers/storage/v1"
 	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -54,6 +56,7 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
+	"k8s.io/kubernetes/pkg/volume/csi"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/operationexecutor"
 	"k8s.io/kubernetes/pkg/volume/util/subpath"
@@ -108,7 +111,7 @@ func NewAttachDetachController(
 	pvInformer coreinformers.PersistentVolumeInformer,
 	csiNodeInformer storageinformers.CSINodeInformer,
 	csiDriverInformer storageinformers.CSIDriverInformer,
-	vaInformer storageinformers.VolumeAttachmentInformer,
+	vaInformer storageinformersv1.VolumeAttachmentInformer,
 	cloud cloudprovider.Interface,
 	plugins []volume.VolumePlugin,
 	prober volume.DynamicPluginProber,
@@ -295,7 +298,7 @@ type attachDetachController struct {
 
 	// vaLister and va synced are used to garbage collector
 	// See https://github.com/kubernetes/kubernetes/issues/77324
-	vaLister storagelisters.VolumeAttachmentLister
+	vaLister storagelistersv1.VolumeAttachmentLister
 	vaSynced kcache.InformerSynced
 
 	// cloud provider used by volume host
@@ -391,6 +394,65 @@ func (adc *attachDetachController) Run(stopCh <-chan struct{}) {
 
 func (adc *attachDetachController) populateActualStateOfWorld() error {
 	klog.V(5).Infof("Populating ActualStateOfworld")
+
+
+	vas, err := adc.vaLister.List(labels.Everything())
+	if err != nil {
+		return err
+	}
+	volumesToAttach := adc.desiredStateOfWorld.GetVolumesToAttach()
+	if len(volumesToAttach) == 0 {
+		klog.Warning("get empty volumes to attach")
+		//return nil
+	}
+	for _, va := range vas {
+		nodeName := types.NodeName(va.Spec.NodeName)
+		if va.Spec.Source.PersistentVolumeName == nil {
+			continue
+		}
+		var volumeName string
+		driverName := va.Spec.Attacher
+/*		if adc.csiDriverLister != nil {
+			driver, err := adc.csiDriverLister.Get(driverName)
+			if err != nil {
+				continue
+			}
+			if driver.Spec.AttachRequired == nil ||
+				(driver.Spec.AttachRequired != nil && *driver.Spec.AttachRequired == false) {
+				continue
+			}
+		}*/
+		pluginName := csi.CSIPluginName
+		pvName := *va.Spec.Source.PersistentVolumeName
+		pv, err := adc.pvLister.Get(pvName)
+		var uniqueVolumeName v1.UniqueVolumeName
+		if err != nil && apierrors.IsNotFound(err) ||
+			pv == nil {
+			deleteError := adc.kubeClient.StorageV1().VolumeAttachments().Delete(va.Name, nil)
+			if deleteError!= nil && apierrors.IsNotFound(deleteError) {
+				continue
+			}
+			klog.Error(deleteError)
+		}
+		volumeName = fmt.Sprintf("%s%s%s", driverName, "^", pv.Spec.CSI.VolumeHandle)
+		uniqueVolumeName = volumeutil.GetUniqueVolumeName(pluginName, volumeName)
+		found := false
+		for _, volumeToAttach := range volumesToAttach {
+			if volumeToAttach.NodeName == nodeName && volumeToAttach.VolumeName == v1.UniqueVolumeName(volumeName) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			err = adc.actualStateOfWorld.MarkVolumeAsUncertain(uniqueVolumeName, nil, /* VolumeSpec */
+				nodeName)
+			if err != nil {
+				klog.Errorf("Failed to mark the volume as uncertain: %v", err)
+				continue
+			}
+		}
+	}
+
 	nodes, err := adc.nodeLister.List(labels.Everything())
 	if err != nil {
 		return err
@@ -405,7 +467,7 @@ func (adc *attachDetachController) populateActualStateOfWorld() error {
 			// volume spec is not needed to detach a volume. If the volume is used by a pod, it
 			// its spec can be: this would happen during in the populateDesiredStateOfWorld which
 			// scans the pods and updates their volumes in the ActualStateOfWorld too.
-			err = adc.actualStateOfWorld.MarkVolumeAsAttached(uniqueName, nil /* VolumeSpec */, nodeName, attachedVolume.DevicePath)
+			err = adc.actualStateOfWorld.MarkVolumeAsAttached(uniqueName, nil /* VolumeSpec */ , nodeName, attachedVolume.DevicePath)
 			if err != nil {
 				klog.Errorf("Failed to mark the volume as attached: %v", err)
 				continue
@@ -415,41 +477,6 @@ func (adc *attachDetachController) populateActualStateOfWorld() error {
 		}
 	}
 
-	vas, err := adc.vaLister.List(labels.Everything())
-	if err != nil {
-		return err
-	}
-	volumesToAttach := adc.desiredStateOfWorld.GetVolumesToAttach()
-	if len(volumesToAttach) == 0 {
-		klog.Warning("get empty volumes to attach")
-	}
-	for _, va := range vas {
-		nodeName := types.NodeName(va.Spec.NodeName)
-		if va.Spec.Source.PersistentVolumeName == nil {
-			continue
-		}
-		volumeName := *va.Spec.Source.PersistentVolumeName
-		pv, err := adc.pvLister.Get(volumeName)
-		if err != nil {
-			klog.Errorf("Can not found pv %q", volumeName)
-		}
-		found := false
-
-		for _, volumeToAttach := range volumesToAttach {
-			if volumeToAttach.NodeName == nodeName && volumeToAttach.VolumeName == v1.UniqueVolumeName(volumeName) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume: pv}, /* VolumeSpec */
-				nodeName)
-			if err != nil {
-				klog.Errorf("Failed to mark the volume as attached: %v", err)
-				continue
-			}
-		}
-	}
 	return nil
 }
 
@@ -634,11 +661,14 @@ func (adc *attachDetachController) nodeDelete(obj interface{}) {
 }
 
 func (adc *attachDetachController) vaAdd(obj interface{}) {
+	klog.Infof("Processing va %+v", obj)
 	va, ok := obj.(*storage.VolumeAttachment)
 	if va == nil || !ok {
 		return
 	}
-	adc.enqueuePVC(&va)
+	adc.enqueueVA(&va)
+	klog.Infof("Processing va %+v success", obj)
+
 }
 
 func (adc *attachDetachController) vaUpdate(oldObj, newObj interface{}) {
@@ -695,6 +725,7 @@ func (adc *attachDetachController) processNextPVCItem() bool {
 }
 
 func (adc *attachDetachController) processNextVAItem() bool {
+	klog.Info("processNextVAItem() Geetting")
 	keyObj, shutdown := adc.vaQueue.Get()
 	if shutdown {
 		return false
@@ -756,13 +787,14 @@ func (adc *attachDetachController) syncPVCByKey(key string) error {
 }
 
 func (adc *attachDetachController) syncVAByKey(key string) error {
-	klog.V(5).Infof("syncVAByKey[%s]", key)
 	va, err := adc.vaLister.Get(key)
+	klog.V(4).Infof("syncVAByKey[%s], va: %+v", key, va)
 	if apierrors.IsNotFound(err) {
 		klog.V(4).Infof("error getting pvc %q from informer: %v", key, err)
 		return nil
 	}
 	if err != nil {
+		klog.V(4).Infof("error getting pvc %q from informer unkonw error: %v", key, err)
 		return err
 	}
 
@@ -772,16 +804,39 @@ func (adc *attachDetachController) syncVAByKey(key string) error {
 	}
 
 	nodeName := types.NodeName(va.Spec.NodeName)
-	volumeName := *va.Spec.Source.PersistentVolumeName
 
 	volumesToAttach := adc.desiredStateOfWorld.GetVolumesToAttach()
 	if len(volumesToAttach) == 0 {
-		return fmt.Errorf("can not get volumes to attach")
+		klog.Info("can not get volumes to attach")
+		//return fmt.Errorf("can not get volumes to attach")
 	}
-	pv, err := adc.pvLister.Get(volumeName)
-	if err != nil {
-		return fmt.Errorf("Can not found pv %q", volumeName)
+
+	var volumeName string
+	driverName := va.Spec.Attacher
+/*	if adc.csiDriverLister != nil {
+		driver, err := adc.csiDriverLister.Get(driverName)
+		if err != nil {
+			return err
+		}
+		if driver.Spec.AttachRequired == nil ||
+			(driver.Spec.AttachRequired != nil && *driver.Spec.AttachRequired == false) {
+			return nil
+		}
+	}*/
+	pluginName := csi.CSIPluginName
+	pvName := *va.Spec.Source.PersistentVolumeName
+	pv, err := adc.pvLister.Get(pvName)
+	var uniqueVolumeName v1.UniqueVolumeName
+	if err != nil && apierrors.IsNotFound(err) || pv == nil{
+		 deleteError := adc.kubeClient.StorageV1().VolumeAttachments().Delete(va.Name, nil)
+		 if deleteError!= nil && apierrors.IsNotFound(deleteError) {
+			 return nil
+		 }
+		 return deleteError
 	}
+
+	volumeName = fmt.Sprintf("%s%s%s", driverName, "^", pv.Spec.CSI.VolumeHandle)
+	uniqueVolumeName = volumeutil.GetUniqueVolumeName(pluginName, volumeName)
 	found := false
 	for _, volumeToAttach := range volumesToAttach {
 		if volumeToAttach.NodeName == nodeName && volumeToAttach.VolumeName == v1.UniqueVolumeName(volumeName) {
@@ -790,10 +845,10 @@ func (adc *attachDetachController) syncVAByKey(key string) error {
 		}
 	}
 	if !found {
-		err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume: pv},
+		err = adc.actualStateOfWorld.MarkVolumeAsUncertain(uniqueVolumeName, nil,
 			nodeName)
 		if err != nil {
-			klog.Errorf("Failed to mark the volume as attached: %v", err)
+			klog.Errorf("Failed to mark the volume as uncertain: %v", err)
 			return err
 		}
 	}
@@ -808,7 +863,11 @@ func (adc *attachDetachController) syncVAByKey(key string) error {
 func (adc *attachDetachController) processVolumesInUse(
 	nodeName types.NodeName, volumesInUse []v1.UniqueVolumeName) {
 	klog.V(4).Infof("processVolumesInUse for node %q", nodeName)
-	for _, attachedVolume := range adc.actualStateOfWorld.GetAttachedVolumesForNode(nodeName) {
+	attachedVolumesForNode := adc.actualStateOfWorld.GetAttachedVolumesForNode(nodeName)
+	klog.V(4).Infof("attachedVolumesForNode %+v", attachedVolumesForNode)
+	klog.V(4).Infof("volumesInUse %q", volumesInUse)
+
+	for _, attachedVolume := range attachedVolumesForNode {
 		mounted := false
 		for _, volumeInUse := range volumesInUse {
 			if attachedVolume.VolumeName == volumeInUse {
