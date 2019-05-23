@@ -405,7 +405,7 @@ func (adc *attachDetachController) populateActualStateOfWorld() error {
 			// volume spec is not needed to detach a volume. If the volume is used by a pod, it
 			// its spec can be: this would happen during in the populateDesiredStateOfWorld which
 			// scans the pods and updates their volumes in the ActualStateOfWorld too.
-			err = adc.actualStateOfWorld.MarkVolumeAsAttached(uniqueName, nil /* VolumeSpec */ , nodeName, attachedVolume.DevicePath)
+			err = adc.actualStateOfWorld.MarkVolumeAsAttached(uniqueName, nil /* VolumeSpec */, nodeName, attachedVolume.DevicePath)
 			if err != nil {
 				klog.Errorf("Failed to mark the volume as attached: %v", err)
 				continue
@@ -442,7 +442,7 @@ func (adc *attachDetachController) populateActualStateOfWorld() error {
 			}
 		}
 		if !found {
-			err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume: pv} /* VolumeSpec */ ,
+			err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume: pv}, /* VolumeSpec */
 				nodeName)
 			if err != nil {
 				klog.Errorf("Failed to mark the volume as attached: %v", err)
@@ -656,7 +656,7 @@ func (adc *attachDetachController) enqueuePVC(obj interface{}) {
 
 func (adc *attachDetachController) enqueueVA(obj interface{}) {
 	va, ok := obj.(*storage.VolumeAttachment)
-	if  !ok {
+	if !ok {
 		return
 	}
 	adc.vaQueue.Add(va.Name)
@@ -776,7 +776,7 @@ func (adc *attachDetachController) syncVAByKey(key string) error {
 
 	volumesToAttach := adc.desiredStateOfWorld.GetVolumesToAttach()
 	if len(volumesToAttach) == 0 {
-		fmt.Errorf("can not get volumes to attach")
+		return fmt.Errorf("can not get volumes to attach")
 	}
 	pv, err := adc.pvLister.Get(volumeName)
 	if err != nil {
@@ -790,7 +790,7 @@ func (adc *attachDetachController) syncVAByKey(key string) error {
 		}
 	}
 	if !found {
-		err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume:pv},
+		err = adc.actualStateOfWorld.MarkVolumeAsUncertain("", &volume.Spec{PersistentVolume: pv},
 			nodeName)
 		if err != nil {
 			klog.Errorf("Failed to mark the volume as attached: %v", err)
