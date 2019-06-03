@@ -468,6 +468,9 @@ func (gc *GarbageCollector) attemptToDeleteItem(item *node) error {
 		_, err = gc.patch(item, patch, func(n *node) ([]byte, error) {
 			return gc.deleteOwnerRefJSONMergePatch(n, ownerUIDs...)
 		})
+		if err != nil && errors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	case len(waitingForDependentsDeletion) != 0 && item.dependentsLength() != 0:
 		deps := item.getDependents()
