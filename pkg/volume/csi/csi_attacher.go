@@ -511,8 +511,7 @@ func (c *csiAttacher) waitForVolumeDetachmentInternal(volumeHandle, attachID str
 				return nil
 
 			case watch.Error:
-				// start another cycle
-				c.waitForVolumeDetachmentInternal(volumeHandle, attachID, timer, timeout)
+				klog.Warningf("waitForVolumeDetachmentInternal received watch error: %v", event)
 			}
 
 		case <-timer.C:
