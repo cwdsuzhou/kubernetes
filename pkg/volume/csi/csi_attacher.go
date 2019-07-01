@@ -639,7 +639,7 @@ func getDriverAndVolNameFromDeviceMountPath(k8s kubernetes.Interface, deviceMoun
 	if err != nil {
 		return "", "", err
 	}
-	if pv == nil || pv.Spec.CSI == nil {
+	if pv.Spec.CSI == nil {
 		return "", "", fmt.Errorf("getDriverAndVolNameFromDeviceMountPath could not find CSI Persistent Volume Source for pv: %s", pvName)
 	}
 
