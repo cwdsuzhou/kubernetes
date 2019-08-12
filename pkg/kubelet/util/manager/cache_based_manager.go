@@ -56,6 +56,7 @@ type objectData struct {
 	object         runtime.Object
 	err            error
 	lastUpdateTime time.Time
+	needUpdate     bool
 }
 
 // objectStore is a local cache of objects.
@@ -63,7 +64,7 @@ type objectStore struct {
 	getObject GetObjectFunc
 	clock     clock.Clock
 
-	lock  sync.Mutex
+	lock  sync.RWMutex
 	items map[objectKey]*objectStoreItem
 
 	defaultTTL time.Duration
@@ -106,10 +107,10 @@ func (s *objectStore) AddReference(namespace, name string) {
 		}
 		s.items[key] = item
 	}
-
-	item.refCount++
 	// This will trigger fetch on the next Get() operation.
-	item.data = nil
+	item.data.needUpdate = true
+	item.refCount++
+
 }
 
 func (s *objectStore) DeleteReference(namespace, name string) {
@@ -149,21 +150,18 @@ func (s *objectStore) isObjectFresh(data *objectData) bool {
 	if ttl, ok := s.getTTL(); ok {
 		objectTTL = ttl
 	}
-	return s.clock.Now().Before(data.lastUpdateTime.Add(objectTTL))
+	return !data.needUpdate && s.clock.Now().Before(data.lastUpdateTime.Add(objectTTL))
 }
 
 func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 	key := objectKey{namespace: namespace, name: name}
 
 	data := func() *objectData {
-		s.lock.Lock()
-		defer s.lock.Unlock()
+		s.lock.RLock()
 		item, exists := s.items[key]
+		s.lock.RUnlock()
 		if !exists {
 			return nil
-		}
-		if item.data == nil {
-			item.data = &objectData{}
 		}
 		return item.data
 	}()
@@ -185,8 +183,8 @@ func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 		}
 
 		object, err := s.getObject(namespace, name, opts)
-		if err != nil && !apierrors.IsNotFound(err) && data.object == nil && data.err == nil {
-			// Couldn't fetch the latest object, but there is no cached data to return.
+		if err != nil && !apierrors.IsNotFound(err) && data.needUpdate {
+			// Couldn't fetch the latest object, but cached data expired.
 			// Return the fetch result instead.
 			return object, err
 		}
@@ -197,6 +195,7 @@ func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 			data.object = object
 			data.err = err
 			data.lastUpdateTime = s.clock.Now()
+			data.needUpdate = false
 		}
 	}
 	return data.object, data.err
