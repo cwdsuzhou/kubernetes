@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -195,6 +195,33 @@ func TestSecretStoreGetNeverRefresh(t *testing.T) {
 	actions := fakeClient.Actions()
 	// Only first Get, should forward the Get request.
 	assert.Equal(t, 10, len(actions), "unexpected actions: %#v", actions)
+}
+
+func TestSecretStoreGetCacheExpiredOnce(t *testing.T) {
+	fakeClient := &fake.Clientset{}
+	lock := clock.RealClock{}
+	store := newSecretStore(fakeClient, lock, noObjectTTL, 1*time.Second)
+
+	for i := 0; i < 10; i++ {
+		store.AddReference(fmt.Sprintf("ns-%d", i), fmt.Sprintf("name-%d", i))
+	}
+	fakeClient.ClearActions()
+
+	wg := sync.WaitGroup{}
+	wg.Add(100)
+	for i := 0; i < 100; i++ {
+		if i == 50 {
+			time.Sleep(1 * time.Second)
+		}
+		go func(i int) {
+			store.Get(fmt.Sprintf("ns-%d", i%10), fmt.Sprintf("name-%d", i%10))
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+	actions := fakeClient.Actions()
+	// Only first Get, should forward the Get request.
+	assert.Equal(t, 20, len(actions), "unexpected actions: %#v", actions)
 }
 
 func TestCustomTTL(t *testing.T) {

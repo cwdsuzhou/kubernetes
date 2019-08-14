@@ -46,8 +46,9 @@ type objectKey struct {
 
 // objectStoreItems is a single item stored in objectStore.
 type objectStoreItem struct {
-	refCount int
-	data     *objectData
+	refCount   int
+	refVersion int
+	data       *objectData
 }
 
 type objectData struct {
@@ -56,7 +57,7 @@ type objectData struct {
 	object         runtime.Object
 	err            error
 	lastUpdateTime time.Time
-	needUpdate     bool
+	lastVersion    int
 }
 
 // objectStore is a local cache of objects.
@@ -108,8 +109,8 @@ func (s *objectStore) AddReference(namespace, name string) {
 		s.items[key] = item
 	}
 	// This will trigger fetch on the next Get() operation.
-	item.data.needUpdate = true
 	item.refCount++
+	item.refVersion++
 
 }
 
@@ -145,25 +146,25 @@ func GetObjectTTLFromNodeFunc(getNode func() (*v1.Node, error)) GetObjectTTLFunc
 	}
 }
 
-func (s *objectStore) isObjectFresh(data *objectData) bool {
+func (s *objectStore) isObjectFresh(data *objectData, refUpdated bool) bool {
 	objectTTL := s.defaultTTL
 	if ttl, ok := s.getTTL(); ok {
 		objectTTL = ttl
 	}
-	return !data.needUpdate && s.clock.Now().Before(data.lastUpdateTime.Add(objectTTL))
+	return !refUpdated && s.clock.Now().Before(data.lastUpdateTime.Add(objectTTL))
 }
 
 func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 	key := objectKey{namespace: namespace, name: name}
 
-	data := func() *objectData {
+	data, refVersion := func() (*objectData, int) {
 		s.lock.RLock()
+		defer s.lock.RUnlock()
 		item, exists := s.items[key]
-		s.lock.RUnlock()
 		if !exists {
-			return nil
+			return nil, 0
 		}
-		return item.data
+		return item.data, item.refVersion
 	}()
 	if data == nil {
 		return nil, fmt.Errorf("object %q/%q not registered", namespace, name)
@@ -173,7 +174,8 @@ func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 	// needed and return data.
 	data.Lock()
 	defer data.Unlock()
-	if data.err != nil || !s.isObjectFresh(data) {
+	refUpdated := data.lastVersion < refVersion
+	if data.err != nil || !s.isObjectFresh(data, refUpdated) {
 		opts := metav1.GetOptions{}
 		if data.object != nil && data.err == nil {
 			// This is just a periodic refresh of an object we successfully fetched previously.
@@ -183,7 +185,7 @@ func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 		}
 
 		object, err := s.getObject(namespace, name, opts)
-		if err != nil && !apierrors.IsNotFound(err) && data.needUpdate {
+		if err != nil && !apierrors.IsNotFound(err) && refUpdated {
 			// Couldn't fetch the latest object, but cached data expired.
 			// Return the fetch result instead.
 			return object, err
@@ -195,7 +197,7 @@ func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 			data.object = object
 			data.err = err
 			data.lastUpdateTime = s.clock.Now()
-			data.needUpdate = false
+			data.lastVersion = refVersion
 		}
 	}
 	return data.object, data.err
