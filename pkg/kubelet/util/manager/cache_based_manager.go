@@ -109,6 +109,7 @@ func (s *objectStore) AddReference(namespace, name string) {
 		s.items[key] = item
 	}
 	// This will trigger fetch on the next Get() operation.
+	// refVersion is used for marking if the cache has changed.
 	item.refCount++
 	item.refVersion++
 
@@ -151,7 +152,10 @@ func (s *objectStore) isObjectFresh(data *objectData, refUpdated bool) bool {
 	if ttl, ok := s.getTTL(); ok {
 		objectTTL = ttl
 	}
-	return !refUpdated && s.clock.Now().Before(data.lastUpdateTime.Add(objectTTL))
+	if refUpdated {
+		return false
+	}
+	return s.clock.Now().Before(data.lastUpdateTime.Add(objectTTL))
 }
 
 func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
@@ -175,30 +179,35 @@ func (s *objectStore) Get(namespace, name string) (runtime.Object, error) {
 	data.Lock()
 	defer data.Unlock()
 	refUpdated := data.lastVersion < refVersion
-	if data.err != nil || !s.isObjectFresh(data, refUpdated) {
-		opts := metav1.GetOptions{}
-		if data.object != nil && data.err == nil {
-			// This is just a periodic refresh of an object we successfully fetched previously.
-			// In this case, server data from apiserver cache to reduce the load on both
-			// etcd and apiserver (the cache is eventually consistent).
-			util.FromApiserverCache(&opts)
-		}
+	if data.err == nil && s.isObjectFresh(data, refUpdated) {
+		return data.object, data.err
+	}
 
-		object, err := s.getObject(namespace, name, opts)
-		if err != nil && !apierrors.IsNotFound(err) && refUpdated {
+	opts := metav1.GetOptions{}
+	if data.object != nil && data.err == nil {
+		// This is just a periodic refresh of an object we successfully fetched previously.
+		// In this case, server data from apiserver cache to reduce the load on both
+		// etcd and apiserver (the cache is eventually consistent).
+		util.FromApiserverCache(&opts)
+	}
+
+	object, err := s.getObject(namespace, name, opts)
+	if err != nil && !apierrors.IsNotFound(err) {
+		if refUpdated {
 			// Couldn't fetch the latest object, but cached data expired.
 			// Return the fetch result instead.
 			return object, err
 		}
-		if (err == nil && !isObjectOlder(object, data.object)) || apierrors.IsNotFound(err) {
-			// If the fetch succeeded with a newer version of the object, or if the
-			// object could not be found in the apiserver, update the cached data to
-			// reflect the current status.
-			data.object = object
-			data.err = err
-			data.lastUpdateTime = s.clock.Now()
-			data.lastVersion = refVersion
-		}
+		return data.object, data.err
+	}
+	if !isObjectOlder(object, data.object) {
+		// If the fetch succeeded with a newer version of the object, or if the
+		// object could not be found in the apiserver, update the cached data to
+		// reflect the current status.
+		data.object = object
+		data.err = err
+		data.lastUpdateTime = s.clock.Now()
+		data.lastVersion = refVersion
 	}
 	return data.object, data.err
 }
