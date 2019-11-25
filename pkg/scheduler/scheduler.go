@@ -572,8 +572,8 @@ func (sched *Scheduler) bind(ctx context.Context, assumed *v1.Pod, targetNode st
 	}
 	if err != nil {
 		klog.V(1).Infof("Failed to bind pod: %v/%v", assumed.Namespace, assumed.Name)
-		if err := sched.SchedulerCache.ForgetPod(assumed); err != nil {
-			klog.Errorf("scheduler cache ForgetPod failed: %v", err)
+		if forgetErr := sched.SchedulerCache.ForgetPod(assumed); forgetErr != nil {
+			klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
 		}
 		return err
 	}
