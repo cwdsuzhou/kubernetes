@@ -1831,6 +1831,14 @@ func TestPickOneNodeForPreemption(t *testing.T) {
 			},
 			expected: []string{"machine2"},
 		},
+		{
+			name:                 "only one node satisfied",
+			registerFilterPlugin: st.RegisterFilterPlugin(noderesources.FitName, noderesources.NewFit),
+			nodes:                []string{"machine1"},
+			pod:                  &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "machine1", UID: types.UID("machine1")}, Spec: v1.PodSpec{Containers: veryLargeContainers, Priority: &highPriority}},
+			pods:                 []*v1.Pod{}, // do not add pods to check if we would select the only one
+			expected:             []string{"machine1"},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

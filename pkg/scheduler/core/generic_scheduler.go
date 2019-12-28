@@ -752,6 +752,9 @@ func pickOneNodeForPreemption(nodesToVictims map[*v1.Node]*extenderv1.Victims) *
 			// preemption logic tries to find nodes for preemption.
 			return node
 		}
+		if len(nodesToVictims) == 1 {
+			return node
+		}
 		numPDBViolatingPods := victims.NumPDBViolations
 		if numPDBViolatingPods < minNumPDBViolatingPods {
 			minNumPDBViolatingPods = numPDBViolatingPods
