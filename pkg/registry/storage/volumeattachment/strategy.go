@@ -19,6 +19,7 @@ package volumeattachment
 import (
 	"context"
 
+	storageapiv1 "k8s.io/api/storage/v1"
 	storageapiv1beta1 "k8s.io/api/storage/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -83,6 +84,7 @@ func (volumeAttachmentStrategy) Validate(ctx context.Context, obj runtime.Object
 
 	switch groupVersion {
 	case storageapiv1beta1.SchemeGroupVersion:
+	case storageapiv1.SchemeGroupVersion:
 		// no extra validation
 	default:
 		// tighten up validation of newly created v1 attachments
@@ -111,8 +113,9 @@ func (volumeAttachmentStrategy) PrepareForUpdate(ctx context.Context, obj, old r
 	oldVolumeAttachment := old.(*storage.VolumeAttachment)
 
 	switch groupVersion {
+	case storageapiv1.SchemeGroupVersion:
 	case storageapiv1beta1.SchemeGroupVersion:
-		// allow modification of Status via main resource for v1beta1
+		// allow modification of Status via main resource for v1beta1 and v1
 	default:
 		newVolumeAttachment.Status = oldVolumeAttachment.Status
 		// No need to increment Generation because we don't allow updates to spec

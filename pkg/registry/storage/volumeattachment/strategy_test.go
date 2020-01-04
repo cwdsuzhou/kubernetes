@@ -113,8 +113,8 @@ func TestVolumeAttachmentStrategy(t *testing.T) {
 
 	Strategy.PrepareForUpdate(ctx, statusVolumeAttachment, volumeAttachment)
 
-	if !apiequality.Semantic.DeepEqual(statusVolumeAttachment, volumeAttachment) {
-		t.Errorf("unexpected objects difference after modifying status: %v", diff.ObjectDiff(statusVolumeAttachment, volumeAttachment))
+	if apiequality.Semantic.DeepEqual(statusVolumeAttachment, volumeAttachment) {
+		t.Error("PrepareForUpdate failed")
 	}
 }
 
@@ -209,7 +209,7 @@ func TestBetaAndV1StatusUpdate(t *testing.T) {
 				Resource:   "volumeattachments",
 			},
 			true,
-			false,
+			true,
 		},
 		{
 			genericapirequest.RequestInfo{
@@ -300,7 +300,7 @@ func TestVolumeAttachmentValidation(t *testing.T) {
 				},
 			},
 			false,
-			true,
+			false,
 		},
 		{
 			"invalid attacher name",
@@ -317,7 +317,7 @@ func TestVolumeAttachmentValidation(t *testing.T) {
 				},
 			},
 			false,
-			true,
+			false,
 		},
 		{
 			"invalid volume attachment",
